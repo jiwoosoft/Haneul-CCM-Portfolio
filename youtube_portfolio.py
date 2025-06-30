@@ -577,7 +577,7 @@ def main():
                 
                 # 팟캐스트 표시
                 if podcast_videos_data:
-                    st.subheader("🎧 팟캐스트")
+                    st.subheader("🎧 CCM List")
                     for idx, item in enumerate(podcast_videos_data, 1):
                         snippet = item['snippet']
                         video_id = snippet['resourceId']['videoId']
@@ -601,7 +601,7 @@ def main():
                         ''', unsafe_allow_html=True)
 
                 # 일반 동영상 표시
-                st.subheader("🎞️ 일반 동영상", anchor="일반-동영상")
+                st.subheader("🎞️ 2시간 연속 CCM", anchor="일반-동영상")
                 if not normal_videos:
                     st.info("일반 동영상이 없습니다.")
                 else:
