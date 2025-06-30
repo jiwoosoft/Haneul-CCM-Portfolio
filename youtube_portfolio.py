@@ -104,8 +104,8 @@ st.set_page_config(
 if 'dark_mode' not in st.session_state:
     st.session_state.dark_mode = True # 기본값을 다크 모드로 설정
 
-# CSS 스타일링 -> 진단 목적으로 임시 비활성화
-# st.markdown(get_css_theme(), unsafe_allow_html=True)
+# CSS 스타일링
+st.markdown(get_css_theme(), unsafe_allow_html=True)
 
 # --- 보안 및 전역 설정 ---
 YOUTUBE_API_KEY = st.secrets.get("youtube_api", {}).get("api_key", "")
@@ -290,16 +290,6 @@ def get_and_increment_visitor_count(db):
         return "N/A"
 
 def main():
-    # --- 진단용 테스트 스타일 ---
-    st.markdown("""
-    <style>
-    h1 {
-        color: red !important;
-        text-align: center;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
     db = initialize_firebase()
     data = load_data_from_firestore(db)
 
@@ -346,7 +336,7 @@ def main():
         st.markdown("---")
         st.toggle('다크 모드', key='dark_mode')
 
-    st.markdown(f"<h1 class='main-header'>[TEST] {title}</h1>", unsafe_allow_html=True)
+    st.markdown(f"<h1 class='main-header'>{title}</h1>", unsafe_allow_html=True)
     st.markdown(f"<p class='sub-header'>{channel_info.get('snippet', {}).get('description', '')}</p>", unsafe_allow_html=True)
 
     videos = data.get("videos", [])
