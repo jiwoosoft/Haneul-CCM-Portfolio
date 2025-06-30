@@ -690,39 +690,6 @@ def display_videos():
     if not data:
         st.error("유튜브 데이터를 불러올 수 없습니다.")
         return
-
-    # 팟캐스트 동영상을 먼저 표시합니다.
-    st.subheader("팟캐스트 동영상")
-    for video in data.get('podcast_videos', []):
-        st.write(f"**{video['snippet']['title']}**")
-        st.write(f"게시일: {format_date(video['snippet']['publishedAt'])}")
-        st.write("---")
-
-    # 일반 동영상과 Shorts를 분류하여 표시합니다.
-    normal_videos = []
-    shorts = []
-    for video in data.get('videos', []):
-        duration_str = video['details']['contentDetails']['duration']
-        duration = isodate.parse_duration(duration_str).total_seconds()
-        if duration > 70:
-            normal_videos.append(video)
-        else:
-            shorts.append(video)
-
-    st.subheader("일반 동영상")
-    for video in normal_videos:
-        st.write(f"**{video['search_snippet']['title']}**")
-        st.write(f"게시일: {format_date(video['search_snippet']['publishedAt'])}")
-        st.write(f"조회수: {format_stat(video['details']['statistics']['viewCount'])}")
-        st.write("---")
-
-    st.subheader("Shorts")
-    for video in shorts:
-        st.write(f"**{video['search_snippet']['title']}**")
-        st.write(f"게시일: {format_date(video['search_snippet']['publishedAt'])}")
-        st.write(f"조회수: {format_stat(video['details']['statistics']['viewCount'])}")
-        st.write("---")
-
 if __name__ == "__main__":
     main()
     display_videos() 
