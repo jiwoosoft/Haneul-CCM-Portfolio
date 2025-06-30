@@ -76,6 +76,8 @@ def get_channel_info(api_key, channel_id):
         response.raise_for_status()
         data = response.json()
         st.success("🐞 디버깅: API 요청 성공!")
+        st.info("🐞 디버깅: API로부터 받은 전체 응답 내용입니다. 아래 내용을 확인해주세요.")
+        st.json(data)  # API 응답 전체를 화면에 예쁘게 출력합니다.
         return data['items'][0]
     except Exception as e:
         st.error("🐞 디버깅: get_channel_info 함수에서 오류가 발생했습니다!")
