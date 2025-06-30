@@ -70,18 +70,19 @@ PODCAST_PLAYLIST_ID = "PL-3k4y9L5-k19y3Yn8a2nB_yS1E8A9GR"
 def get_channel_info(api_key, channel_id):
     """채널 정보를 가져옵니다. (1시간 캐시)"""
     url = f"https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id={channel_id}&key={api_key}"
-    st.info(f"🐞 디버깅: get_channel_info 호출됨. URL: {url.split('&key=')[0]}&key=...{api_key[-5:] if api_key else '키 없음'}")
     try:
         response = requests.get(url)
         response.raise_for_status()
         data = response.json()
-        st.success("🐞 디버깅: API 요청 성공!")
-        st.info("🐞 디버깅: API로부터 받은 전체 응답 내용입니다. 아래 내용을 확인해주세요.")
-        st.json(data)  # API 응답 전체를 화면에 예쁘게 출력합니다.
-        return data['items'][0]
+        # API 응답에 'items'가 있고 비어있지 않은지 확인
+        if data.get("pageInfo", {}).get("totalResults", 0) > 0 and "items" in data:
+            return data["items"][0]
+        else:
+            # 채널을 찾을 수 없는 경우 (응답은 성공적이지만 내용이 없음)
+            print(f"No channel found for ID: {channel_id}. Full response: {data}")
+            return None
     except Exception as e:
-        st.error("🐞 디버깅: get_channel_info 함수에서 오류가 발생했습니다!")
-        st.exception(e) # 오류의 전체 내용을 화면에 출력합니다.
+        print(f"Error getting channel info: {e}")
         return None
 
 @st.cache_data(ttl=3600)
@@ -210,13 +211,12 @@ def format_duration(duration_str):
 
 # --- 7. 메인 애플리케이션 실행 ---
 def main():
-    st.info(f"🐞 디버깅: main 함수 시작. API 키의 마지막 5글자: ...{YOUTUBE_API_KEY[-5:] if YOUTUBE_API_KEY else '키 없음'}")
     db = initialize_firebase()
     
     api_data = get_combined_api_data(YOUTUBE_API_KEY, CHANNEL_ID, PODCAST_PLAYLIST_ID)
     
     if not api_data:
-        st.error("YouTube API에서 데이터를 가져오는 데 실패했습니다. API 키 또는 할당량을 확인해주세요.")
+        st.error("YouTube API에서 데이터를 가져오는 데 실패했습니다. 채널이 비공개이거나 API 할당량을 초과했을 수 있습니다.")
         return
 
     channel_info = api_data["channel_info"]
