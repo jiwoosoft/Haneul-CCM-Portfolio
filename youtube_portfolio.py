@@ -61,7 +61,7 @@ st.markdown(get_css(), unsafe_allow_html=True)
 
 # --- 3. 전역 변수 및 보안 설정 ---
 YOUTUBE_API_KEY = st.secrets.get("youtube_api", {}).get("api_key", "")
-CHANNEL_ID = "UC3_tY22M9-1a_Z-a_i-x5iA"
+CHANNEL_ID = "UC4nfPrwy8bi0q-eryODxiGQ"
 PODCAST_PLAYLIST_ID = "PL-3k4y9L5-k19y3Yn8a2nB_yS1E8A9GR"
 
 # --- 4. 데이터 처리 및 API 호출 함수 (올바른 캐시 구조) ---
