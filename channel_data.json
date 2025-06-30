@@ -1,67 +1,51 @@
 {
-  "channel_info": {
-    "title": "Haneul CCM",
-    "description": "CCM 작곡가 하늘의 음악 세계에 오신 것을 환영합니다. 하나님을 찬양하는 마음으로 만든 음악들을 감상해보세요.",
-    "subscriber_count": "1,234",
-    "video_count": "25",
-    "view_count": "45,678",
-    "last_updated": "2025-06-29 19:59:27"
-  },
-  "videos": [
-    {
-      "id": "video1",
-      "title": "🎵 내 마음의 평화 - CCM 작곡",
-      "description": "하루의 끝에서 마음을 위로하는 CCM 곡입니다. 하나님의 평화가 여러분의 마음에 임하시길 바랍니다. 조용한 피아노 선율과 함께 마음의 평화를 찾아보세요.",
-      "published_at": "2024-01-15T10:00:00Z",
-      "thumbnail": "https://via.placeholder.com/320x180/667eea/ffffff?text=CCM+Music",
-      "youtube_url": "https://www.youtube.com/watch?v=sample1",
-      "duration": "4:32",
-      "views": "1,234",
-      "likes": "89"
+    "channel_info": {
+        "kind": "youtube#channel",
+        "etag": "EXAMPLE_ETAG",
+        "id": "UC_CHANNEL_ID",
+        "snippet": {
+            "title": "하늘빛",
+            "description": "✝ [하늘빛] 채널에 오신 여러분을 환영합니다! ✝ 지친 마음에 위로가 되는 찬양을 들려드리고 싶습니다. ✝ ✝ [하늘빛] 찬양으로 모든 분들의 마음에 하나님의 은혜와 사랑과 따뜻한 위로가 전해지길 간절히 기도합니다. ✝\n✝ 찬양곡은 지속적으로 업데이트 됩니다. ✝\n\n#CCM #찬양 #예배음악 #기독교음악 #묵상 #찬양채널 #찬송 #찬양워십 #복음성가 #찬양곡 #찬양플레이리스트 #기도음악 #ccm찬양 #하늘빛 #하늘빛CCM #예수님찬양 #하나님 #크리스천 #크리스천뮤직 #기도찬양",
+            "publishedAt": "2023-01-01T00:00:00Z",
+            "thumbnails": {
+                "default": { "url": "https://via.placeholder.com/88", "width": 88, "height": 88 },
+                "medium": { "url": "https://via.placeholder.com/240", "width": 240, "height": 240 },
+                "high": { "url": "https://via.placeholder.com/800", "width": 800, "height": 800 }
+            },
+            "localized": { "title": "하늘빛", "description": "..." }
+        },
+        "statistics": { "viewCount": "9496", "subscriberCount": "53", "hiddenSubscriberCount": false, "videoCount": "40" }
     },
-    {
-      "id": "video2",
-      "title": "🙏 주님의 은혜로 - 찬양곡",
-      "description": "주님의 크신 은혜를 노래하는 찬양곡입니다. 함께 찬양하며 주님을 찬양합시다. 기타와 드럼이 어우러진 경쾌한 리듬의 CCM입니다.",
-      "published_at": "2024-01-10T15:30:00Z",
-      "thumbnail": "https://via.placeholder.com/320x180/764ba2/ffffff?text=Praise+Song",
-      "youtube_url": "https://www.youtube.com/watch?v=sample2",
-      "duration": "3:45",
-      "views": "2,156",
-      "likes": "156"
-    },
-    {
-      "id": "video3",
-      "title": "🌟 새벽기도 - 기도하는 마음",
-      "description": "새벽에 드리는 기도의 마음을 담은 CCM 곡입니다. 조용한 새벽 시간에 함께 기도해요. 아름다운 현악기 사운드와 함께 기도의 시간을 가져보세요.",
-      "published_at": "2024-01-05T06:00:00Z",
-      "thumbnail": "https://via.placeholder.com/320x180/f093fb/ffffff?text=Morning+Prayer",
-      "youtube_url": "https://www.youtube.com/watch?v=sample3",
-      "duration": "5:18",
-      "views": "987",
-      "likes": "67"
-    },
-    {
-      "id": "video4",
-      "title": "💝 하나님의 사랑 - 감사 찬양",
-      "description": "하나님의 크신 사랑에 감사하며 드리는 찬양입니다. 우리를 이끌어주시는 하나님의 사랑을 노래합니다. 따뜻한 보컬과 함께 감사한 마음을 표현해보세요.",
-      "published_at": "2024-01-01T12:00:00Z",
-      "thumbnail": "https://via.placeholder.com/320x180/667eea/ffffff?text=God's+Love",
-      "youtube_url": "https://www.youtube.com/watch?v=sample4",
-      "duration": "4:15",
-      "views": "1,567",
-      "likes": "123"
-    },
-    {
-      "id": "video5",
-      "title": "🕊️ 성령의 인도하심 - 순종의 노래",
-      "description": "성령님의 인도하심을 따라가는 순종의 노래입니다. 하나님의 뜻을 구하며 걸어가는 믿음의 여정을 담았습니다. 평화로운 멜로디와 함께 성령의 인도를 받아보세요.",
-      "published_at": "2023-12-25T20:00:00Z",
-      "thumbnail": "https://via.placeholder.com/320x180/764ba2/ffffff?text=Holy+Spirit",
-      "youtube_url": "https://www.youtube.com/watch?v=sample5",
-      "duration": "6:22",
-      "views": "2,345",
-      "likes": "234"
-    }
-  ]
-}
+    "videos": [
+        {
+            "search_snippet": {
+                "publishedAt": "2024-06-20T12:00:00Z",
+                "channelId": "UC_CHANNEL_ID",
+                "title": "샘플 찬양 1: 은혜의 강가로",
+                "description": "이곳은 샘플 설명입니다. 잔잔한 멜로디와 함께 하나님의 은혜를 느껴보세요.",
+                "thumbnails": { "medium": { "url": "https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg" } }
+            },
+            "details": {
+                "id": "dQw4w9WgXcQ",
+                "contentDetails": { "duration": "PT4M12S" },
+                "statistics": { "viewCount": "1234", "likeCount": "56" }
+            }
+        },
+        {
+            "search_snippet": {
+                "publishedAt": "2024-06-18T12:00:00Z",
+                "channelId": "UC_CHANNEL_ID",
+                "title": "샘플 기도 2: 주님과 함께하는 시간",
+                "description": "샘플 영상입니다. 이 영상을 통해 잠시 멈추어 주님과 교제하는 시간을 가져보세요.",
+                "thumbnails": { "medium": { "url": "https://i.ytimg.com/vi/L_jWHffIx5E/mqdefault.jpg" } }
+            },
+            "details": {
+                "id": "L_jWHffIx5E",
+                "contentDetails": { "duration": "PT10M5S" },
+                "statistics": { "viewCount": "5678", "likeCount": "123" }
+            }
+        }
+    ],
+    "podcast_videos": [],
+    "last_updated": "2024-06-30T00:00:00.000000Z"
+} 

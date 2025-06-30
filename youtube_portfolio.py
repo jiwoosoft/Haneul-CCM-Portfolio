@@ -162,11 +162,19 @@ def fetch_and_cache_youtube_data():
     # 1. 채널 정보 가져오기
     channel_info = get_channel_info()
     if not channel_info:
-        st.error("채널 정보를 가져올 수 없습니다. API 키와 채널 ID를 확인해주세요.")
+        print("채널 정보를 가져올 수 없어 캐싱을 중단합니다.")
         return None
 
     # 2. 모든 동영상 목록 가져오기
     all_videos_search = get_all_videos()
+    
+    # 중요: 채널 통계상 동영상은 있는데, API로 하나도 못가져왔다면 오류로 간주하고 캐싱 중단
+    # 이렇게 해야 할당량 초과 등으로 빈 목록이 기존 캐시를 덮어쓰는 것을 방지
+    video_count_stat = int(channel_info.get('statistics', {}).get('videoCount', '0'))
+    if video_count_stat > 0 and not all_videos_search:
+        print("채널에 영상이 있지만 목록을 가져오지 못했습니다. API 할당량 초과일 수 있으므로 캐싱을 중단합니다.")
+        return None
+        
     video_ids = [v['id']['videoId'] for v in all_videos_search]
     video_details = get_video_details(video_ids)
 
