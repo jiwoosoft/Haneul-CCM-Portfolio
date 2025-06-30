@@ -104,17 +104,13 @@ st.set_page_config(
 if 'dark_mode' not in st.session_state:
     st.session_state.dark_mode = True # 기본값을 다크 모드로 설정
 
-# CSS 스타일링 (다크 모드/라이트 모드)
-# 기존 CSS를 수정하여 디자인을 개선
+# CSS 스타일링
 st.markdown(get_css_theme(), unsafe_allow_html=True)
 
-# --- 보안 설정: st.secrets에서 API 정보 가져오기 ---
-YOUTUBE_API_KEY = st.secrets.get("YOUTUBE_API_KEY", "")
-CHANNEL_ID = st.secrets.get("CHANNEL_ID", "")
-PODCAST_PLAYLIST_ID = st.secrets.get("PODCAST_PLAYLIST_ID", "PL-3k4y9L5-k19y3Yn8a2nB_yS1E8A9GR")
-
-# 데이터 파일 경로 (이제 사용하지 않음)
-# DATA_FILE = "channel_data.json"
+# --- 보안 및 전역 설정 ---
+YOUTUBE_API_KEY = st.secrets.get("youtube_api", {}).get("api_key", "")
+CHANNEL_ID = "UC3_tY22M9-1a_Z-a_i-x5iA" 
+PODCAST_PLAYLIST_ID = "PL-3k4y9L5-k19y3Yn8a2nB_yS1E8A9GR"
 
 def get_default_data():
     """데이터가 없을 때 사용할 기본 데이터 구조를 반환합니다."""
@@ -139,7 +135,6 @@ def load_data_from_firestore(db):
         if doc.exists:
             return doc.to_dict()
         else:
-            # Firestore에 데이터가 없는 첫 실행 상태
             return get_default_data()
     except Exception as e:
         st.error(f"데이터 로드 중 오류 발생: {e}")
@@ -149,11 +144,10 @@ def needs_update(data):
     """데이터를 마지막으로 업데이트한 지 24시간이 지났는지 확인합니다."""
     try:
         last_updated_str = data.get("last_updated", "1970-01-01T00:00:00Z")
-        # Python 3.10 or lower doesn't handle 'Z' suffix well, so we replace it
         last_updated = datetime.fromisoformat(last_updated_str.replace('Z', '+00:00'))
         return datetime.now(last_updated.tzinfo) - last_updated > timedelta(hours=24)
     except Exception:
-        return True # 오류 발생 시 업데이트 시도
+        return True
 
 def fetch_and_cache_youtube_data(db):
     """YouTube API에서 최신 데이터를 가져와 Firestore에 저장(캐시)합니다."""
@@ -161,17 +155,12 @@ def fetch_and_cache_youtube_data(db):
         st.error("데이터베이스에 연결되지 않아 캐시를 업데이트할 수 없습니다.")
         return None
 
-    # 1. 채널 정보 가져오기
     channel_info = get_channel_info()
     if not channel_info:
-        print("채널 정보를 가져올 수 없어 캐싱을 중단합니다.")
+        st.warning("채널 정보를 가져올 수 없어 캐싱을 중단합니다.")
         return None
 
-    # 2. 모든 동영상 목록 가져오기
     all_videos_search = get_all_videos()
-    
-    # 중요: 채널 통계상 동영상은 있는데, API로 하나도 못가져왔다면 오류로 간주하고 캐싱 중단
-    # 이렇게 해야 할당량 초과 등으로 빈 목록이 기존 캐시를 덮어쓰는 것을 방지
     video_count_stat = int(channel_info.get('statistics', {}).get('videoCount', '0'))
     if video_count_stat > 0 and not all_videos_search:
         st.warning("채널에 영상이 있지만 목록을 가져오지 못했습니다. API 할당량 초과일 수 있으므로 캐싱을 중단합니다.")
@@ -179,20 +168,13 @@ def fetch_and_cache_youtube_data(db):
         
     video_ids = [v['id']['videoId'] for v in all_videos_search]
     video_details = get_video_details(video_ids)
+    processed_videos = [
+        {"search_snippet": v['snippet'], "details": video_details[v['id']['videoId']]}
+        for v in all_videos_search if v['id']['videoId'] in video_details
+    ]
 
-    processed_videos = []
-    for video in all_videos_search:
-        video_id = video['id']['videoId']
-        if video_id in video_details:
-            processed_videos.append({
-                "search_snippet": video['snippet'],
-                "details": video_details[video_id]
-            })
-
-    # 3. 팟캐스트 플레이리스트 동영상 가져오기
     podcast_playlist_items = get_playlist_videos(PODCAST_PLAYLIST_ID)
 
-    # 4. 최종 데이터 객체 생성
     new_data = {
         "channel_info": channel_info,
         "videos": processed_videos,
@@ -200,7 +182,6 @@ def fetch_and_cache_youtube_data(db):
         "last_updated": datetime.utcnow().isoformat() + 'Z'
     }
 
-    # 5. Firestore에 데이터 저장
     try:
         doc_ref = db.collection('app_cache').document('youtube_data')
         doc_ref.set(new_data)
@@ -211,207 +192,107 @@ def fetch_and_cache_youtube_data(db):
         return None
 
 def get_channel_info():
-    """채널 기본 정보 가져오기"""
-    url = f"https://www.googleapis.com/youtube/v3/channels"
-    params = {
-        'part': 'snippet,statistics',
-        'id': CHANNEL_ID,
-        'key': YOUTUBE_API_KEY
-    }
-    
+    url = f"https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id={CHANNEL_ID}&key={YOUTUBE_API_KEY}"
     try:
-        response = requests.get(url, params=params)
-        response.raise_for_status()  # 200번대 코드가 아니면 예외 발생
-        data = response.json()
-        if data['items']:
-            return data['items'][0]
-    except requests.exceptions.RequestException as e:
-        # st.error 대신 콘솔에만 로그를 남기거나 아무것도 하지 않음
-        print(f"채널 정보 API 오류: {e}")
-    
-    return None
-
-def get_videos():
-    """채널의 동영상 목록 가져오기"""
-    url = "https://www.googleapis.com/youtube/v3/search"
-    params = {
-        'part': 'snippet',
-        'channelId': CHANNEL_ID,
-        'order': 'date',
-        'type': 'video',
-        'maxResults': 20,
-        'key': YOUTUBE_API_KEY
-    }
-    
-    try:
-        response = requests.get(url, params=params)
+        response = requests.get(url)
         response.raise_for_status()
-        return response.json()['items']
-    except requests.exceptions.RequestException as e:
-        print(f"동영상 목록을 가져오는 중 오류가 발생했습니다: {e}")
-    
-    return []
+        return response.json()['items'][0]
+    except (requests.exceptions.RequestException, IndexError, KeyError) as e:
+        print(f"채널 정보 API 오류: {e}")
+        return None
 
-def get_video_details(video_ids):
-    """동영상 상세 정보 가져오기 (여러 ID 처리 및 contentDetails 포함)"""
-    url = "https://www.googleapis.com/youtube/v3/videos"
-    details = {}
-    
-    # YouTube API는 한 번에 50개의 ID만 조회 가능
-    for i in range(0, len(video_ids), 50):
-        batch_ids = video_ids[i:i+50]
-        params = {
-            'part': 'snippet,statistics,contentDetails',
-            'id': ','.join(batch_ids),
-            'key': YOUTUBE_API_KEY
-        }
-        
-        try:
-            response = requests.get(url, params=params)
+def get_all_videos():
+    videos = []
+    params = {'part': 'snippet', 'channelId': CHANNEL_ID, 'order': 'date', 'type': 'video', 'maxResults': 50, 'key': YOUTUBE_API_KEY}
+    try:
+        while True:
+            response = requests.get("https://www.googleapis.com/youtube/v3/search", params=params)
             response.raise_for_status()
             data = response.json()
-            for item in data.get('items', []):
+            videos.extend(data.get('items', []))
+            if 'nextPageToken' in data:
+                params['pageToken'] = data['nextPageToken']
+            else:
+                break
+    except requests.exceptions.RequestException as e:
+        print(f"전체 동영상 목록 API 오류: {e}")
+    return videos
+
+def get_video_details(video_ids):
+    details = {}
+    for i in range(0, len(video_ids), 50):
+        batch_ids = ','.join(video_ids[i:i+50])
+        url = f"https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id={batch_ids}&key={YOUTUBE_API_KEY}"
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            for item in response.json().get('items', []):
                 details[item['id']] = item
         except requests.exceptions.RequestException as e:
             print(f"동영상 상세 정보 API 오류: {e}")
-    
     return details
 
-def format_date(date_string):
-    """날짜 포맷팅"""
+def get_playlist_videos(playlist_id):
+    videos = []
+    params = {'part': 'snippet', 'playlistId': playlist_id, 'maxResults': 50, 'key': YOUTUBE_API_KEY}
     try:
-        date_obj = datetime.strptime(date_string, '%Y-%m-%dT%H:%M:%SZ')
-        return date_obj.strftime('%Y년 %m월 %d일')
+        while True:
+            response = requests.get("https://www.googleapis.com/youtube/v3/playlistItems", params=params)
+            response.raise_for_status()
+            data = response.json()
+            videos.extend(data.get('items', []))
+            if 'nextPageToken' in data:
+                params['pageToken'] = data['nextPageToken']
+            else:
+                break
+    except requests.exceptions.RequestException as e:
+        print(f"플레이리스트 동영상 API 오류: {e}")
+    return videos
+
+def format_duration(duration_str):
+    try:
+        return str(isodate.parse_duration(duration_str))
     except:
-        return date_string
+        return "0:00"
 
 def format_stat(val):
     try:
         return f"{int(val):,}"
-    except:
-        return "N/A"
+    except (ValueError, TypeError):
+        return "0"
 
-def get_all_videos():
-    """모든 동영상 가져오기"""
-    url = "https://www.googleapis.com/youtube/v3/search"
-    videos = []
-    params = {
-        'part': 'snippet',
-        'channelId': CHANNEL_ID,
-        'order': 'date',
-        'type': 'video',
-        'maxResults': 50,
-        'key': YOUTUBE_API_KEY
-    }
-    
-    try:
-        while True:
-            response = requests.get(url, params=params)
-            response.raise_for_status()
-            data = response.json()
-            videos.extend(data.get('items', []))
-            if 'nextPageToken' in data:
-                params['pageToken'] = data['nextPageToken']
-            else:
-                break
-        return videos
-    except requests.exceptions.RequestException as e:
-        print(f"전체 동영상 목록을 가져오는 중 오류가 발생했습니다: {e}")
-        return []
-
-def get_playlist_videos(playlist_id):
-    """플레이리스트 동영상 가져오기"""
-    url = "https://www.googleapis.com/youtube/v3/playlistItems"
-    videos = []
-    params = {
-        'part': 'snippet',
-        'playlistId': playlist_id,
-        'maxResults': 50,
-        'key': YOUTUBE_API_KEY
-    }
-    
-    try:
-        while True:
-            response = requests.get(url, params=params)
-            response.raise_for_status()
-            data = response.json()
-            videos.extend(data.get('items', []))
-            if 'nextPageToken' in data:
-                params['pageToken'] = data['nextPageToken']
-            else:
-                break
-        return videos
-    except requests.exceptions.RequestException as e:
-        print(f"플레이리스트 동영상을 가져오는 중 오류가 발생했습니다: {e}")
-        return []
-
-def format_duration(duration_str):
-    """ISO 8601 duration을 읽기 쉬운 형태로 변환"""
-    try:
-        duration = isodate.parse_duration(duration_str)
-        total_seconds = int(duration.total_seconds())
-        minutes = total_seconds // 60
-        seconds = total_seconds % 60
-        return f"{minutes}:{seconds:02d}"
-    except:
-        return "0:00"
-
-# --- Firebase 초기화 함수 ---
 @st.cache_resource
 def initialize_firebase():
     """Firebase 앱을 초기화하고 Firestore 클라이언트 객체를 반환합니다."""
     try:
         if "firebase_credentials" in st.secrets and "firebase_database" in st.secrets:
             creds_dict = dict(st.secrets["firebase_credentials"])
-            
             if creds_dict and all(isinstance(v, str) for v in creds_dict.values()):
                 if not firebase_admin._apps:
                     cred = credentials.Certificate(creds_dict)
-                    firebase_admin.initialize_app(cred, {
-                        'databaseURL': st.secrets["firebase_database"]["databaseURL"]
-                    })
+                    firebase_admin.initialize_app(cred, {'databaseURL': st.secrets["firebase_database"]["databaseURL"]})
                 return firestore.client()
-            else:
-                st.error("Firebase 인증 정보 형식이 올바르지 않습니다. Secrets 설정을 확인해주세요.")
-                return None
-        else:
-            st.error("Secrets에서 Firebase 설정 키를 찾을 수 없습니다.")
-            return None
     except Exception as e:
         st.error(f"Firebase 초기화 중 오류 발생: {e}")
-        return None
+    return None
 
 def get_and_increment_visitor_count(db):
     """Firestore에서 방문자 수를 가져오고 1 증가시킨 뒤 반환합니다."""
-    if db is None:
-        st.error("방문자 수 업데이트 중 오류 발생: 데이터베이스 연결이 없습니다.")
-        return "N/A"
+    if db is None: return "N/A"
     try:
         doc_ref = db.collection('visitors').document('counter')
         doc = doc_ref.get()
-
-        if doc.exists:
-            count = doc.to_dict().get("count", 0)
-            new_count = count + 1
-            doc_ref.update({"count": new_count})
-            return new_count
-        else:
-            # 문서가 없으면 새로 생성
-            doc_ref.set({"count": 1})
-            return 1
+        count = doc.to_dict().get("count", 0) + 1 if doc.exists else 1
+        doc_ref.set({"count": count})
+        return count
     except Exception as e:
         st.error(f"방문자 수 업데이트 중 오류 발생: {e}")
         return "N/A"
 
 def main():
-    """메인 애플리케이션 함수"""
-    # --- 초기화 ---
     db = initialize_firebase()
-
-    # --- 데이터 로딩 및 캐시 관리 (Firebase 사용) ---
     data = load_data_from_firestore(db)
 
-    # 앱 시작 시 또는 새로고침 시 업데이트 필요 여부 확인
     if needs_update(data):
         st.toast("최신 채널 정보를 가져오는 중... ⏳")
         new_data = fetch_and_cache_youtube_data(db)
@@ -420,260 +301,71 @@ def main():
         else:
             st.warning("데이터 업데이트에 실패했습니다. 잠시 후 다시 시도해주세요. (API 할당량 초과일 수 있습니다)")
 
-    # 필요한 데이터 추출
     channel_info = data.get("channel_info", get_default_data()["channel_info"])
     stats = channel_info.get('statistics', {})
     title = channel_info.get('snippet', {}).get('title', 'Haneul CCM')
-    subscriber_count = stats.get('subscriberCount', '0')
-    video_count = stats.get('videoCount', '0')
-    view_count = stats.get('viewCount', '0')
+    
+    with st.sidebar:
+        try:
+            with open("CCM.png", "rb") as image_file:
+                encoded_string = base64.b64encode(image_file.read()).decode()
+            st.markdown(f'<div style="text-align: center; margin-bottom: 20px;"><img src="data:image/png;base64,{encoded_string}" width="120"></div>', unsafe_allow_html=True)
+        except FileNotFoundError:
+            st.title("🎵 Haneul CCM")
 
-    # CSS 적용
-    st.markdown(get_css_theme(), unsafe_allow_html=True)
-
-    st.markdown('<h1 class="main-header">🎵 Haneul CCM Portfolio</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-header">CCM 하늘빛 음악 세계에 오신 것을 환영합니다</p>', unsafe_allow_html=True)
-
-    col1, col2 = st.columns([1, 2.5])
-
-    with col1:
-        st.header("🎵 채널 정보")
-        st.markdown(f"**Youtube 채널명:** {title}")
-        st.markdown(f"**구독자:** {format_stat(subscriber_count)}")
-        st.markdown(f"**총 동영상:** {format_stat(video_count)}")
-        st.markdown(f"**총 조회수:** {format_stat(view_count)}")
-
-        # --- 방문자 카운터 표시 ---
         visitor_count = get_and_increment_visitor_count(db)
         if visitor_count != "N/A":
             st.markdown(f"**방문자 수:** {visitor_count:,}")
 
-        st.header("🔍 필터")
-        sort_by = st.selectbox("정렬 기준", ["최신순", "인기순", "제목순"], label_visibility="collapsed")
-        search_term = st.text_input("검색어 입력", placeholder="검색어를 입력하세요...")
+        st.markdown("---")
+        st.subheader("채널 정보")
+        st.markdown(f"""
+        - **YouTube 채널명:** {title}
+        - **구독자:** {format_stat(stats.get('subscriberCount'))}
+        - **총 동영상:** {format_stat(stats.get('videoCount'))}
+        - **총 조회수:** {format_stat(stats.get('viewCount'))}
+        """)
         
-        st.header("📱 연락처")
-        st.markdown("**이메일:** webmaster@jiwoosoft.com")
-        st.markdown("**홈페이지:** [www.Jiwoosoft.com](http://www.jiwoosoft.com)")
-        st.markdown("**YouTube:** [@HaneulCCM](https://www.youtube.com/@HaneulCCM)")
+        last_updated_str = data.get("last_updated", "1970-01-01T00:00:00Z").replace('Z', '+00:00')
+        last_updated_dt = datetime.fromisoformat(last_updated_str)
+        st.caption(f"마지막 업데이트: {last_updated_dt.strftime('%Y-%m-%d %H:%M:%S')}")
+
+        st.markdown("---")
+        st.info("이 포트폴리오는 Streamlit을 사용하여 제작되었습니다.")
         
-        st.header("🌙 테마 설정")
+        st.markdown("---")
         st.toggle('다크 모드', key='dark_mode')
 
-    with col2:
-        # 본문(채널카드+동영상리스트)
-        with st.container():
-            # 이 아랫부분의 """...""" 안의 내용을 직접 수정하시면 됩니다.
-            # <br>은 줄바꿈(Enter)입니다.
-            main_description = """
-            ✝ [하늘빛] 채널에 오신 여러분을 환영합니다! ✝<br>
-            지친 마음에 위로가 되는 찬양을 들려드리고 싶습니다.<br><br>
-            하나님의 은혜와 사랑과 따뜻한 위로가<br>
-            여러분의 삶에 가득하길 간절히 기도합니다.
-            """
+    st.markdown(f"<h1 class='main-header'>{title}</h1>", unsafe_allow_html=True)
+    st.markdown(f"<p class='sub-header'>{channel_info.get('snippet', {}).get('description', '')}</p>", unsafe_allow_html=True)
 
-            st.markdown(
-                f'''
-                <div style="padding: 2.5rem 1.5rem; background: linear-gradient(135deg, rgb(85, 111, 180) 0%, rgb(34, 57, 117) 100%); border-radius: 22px; text-align: center; color: white; position: relative; overflow: hidden; box-shadow: rgba(0, 0, 0, 0.1) 0px 8px 32px;">
-                    <img src="CCM.png" style="position:absolute; left:0; top:0; width:100%; height:100%; object-fit:cover; opacity:0.18; filter:blur(4px); z-index:0;" />
-                    <div style="position:relative; z-index:1;">
-                        <h1 style="margin-bottom:0.5rem; font-size:2.6rem; font-weight:900; letter-spacing:0.02em;">{title}</h1>
-                        <div style="font-size:1.15rem; color:#fff; opacity:0.92; margin-bottom:1.5rem; font-weight:400; line-height: 1.7;">{main_description}</div>
-                        <div class="stats-container" style="justify-content:center; gap:3.5rem; background:rgba(255,255,255,0.10); margin-bottom:0.5rem;">
-                            <div class="stat-item">
-                                <div class="stat-number">{format_stat(subscriber_count)}</div>
-                                <div class="stat-label">구독자</div>
-                            </div>
-                            <div class="stat-item">
-                                <div class="stat-number">{format_stat(video_count)}</div>
-                                <div class="stat-label">동영상</div>
-                            </div>
-                            <div class="stat-item">
-                                <div class="stat-number">{format_stat(view_count)}</div>
-                                <div class="stat-label">총 조회수</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                ''', unsafe_allow_html=True
-            )
-
-            # 바로가기 버튼
-           # st.markdown("""
-           #<div class="shortcut-buttons" style="margin-bottom:2.2rem;">
-           #    <a href="#동영상" class="shortcut-button">동영상</a>
-           #    <a href="#Shorts" class="shortcut-button">Shorts</a>
-           #</div>
-           # """, unsafe_allow_html=True)
-
-            # 동영상 리스트 전체를 하나의 div로 감싸기
-            st.markdown('<div id="video-list">', unsafe_allow_html=True)
-            
-            # 동영상 리스트 헤더와 바로가기 버튼
-            st.markdown("""
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                <h2 style="font-size: 1.75rem; margin: 0;">📹 업로드된 동영상</h2>
-                <div class="shortcut-buttons">
-                    <a href="#일반-동영상" class="shortcut-button">동영상</a>
-                    <a href="#shorts" class="shortcut-button">Shorts</a>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # API에서 동영상 가져오기 -> 캐시된 데이터 사용으로 변경
-            all_videos_data = data.get("videos", [])
-            podcast_videos_data = data.get("podcast_videos", [])
-            
-            if all_videos_data:
-                # Shorts/일반 동영상 분리
-                shorts = []
-                normal_videos = []
-                
-                for video_data in all_videos_data:
-                    details = video_data.get('details', {})
-                    content_details = details.get('contentDetails', {})
-                    duration_str = content_details.get('duration', 'PT0S')
-                    
-                    try:
-                        duration = isodate.parse_duration(duration_str)
-                        seconds = duration.total_seconds()
-                    except:
-                        seconds = 0
-                    
-                    if seconds <= 60:
-                        shorts.append(video_data)
-                    else:
-                        normal_videos.append(video_data)
-                
-                # 팟캐스트 플레이리스트 동영상 ID 추출
-                podcast_video_ids = set()
-                for item in podcast_videos_data:
-                    vid = item['snippet']['resourceId']['videoId']
-                    podcast_video_ids.add(vid)
-                
-                # 일반/Shorts에서 팟캐스트 동영상 제외
-                normal_videos = [v for v in normal_videos if v['details']['id'] not in podcast_video_ids]
-                shorts = [v for v in shorts if v['details']['id'] not in podcast_video_ids]
-                
-                # 검색 필터 적용
-                if search_term:
-                    normal_videos = [v for v in normal_videos if search_term.lower() in v['search_snippet']['title'].lower()]
-                    shorts = [v for v in shorts if search_term.lower() in v['search_snippet']['title'].lower()]
-                
-                # 정렬 적용
-                if sort_by == "최신순":
-                    normal_videos.sort(key=lambda x: x['search_snippet']['publishedAt'], reverse=True)
-                    shorts.sort(key=lambda x: x['search_snippet']['publishedAt'], reverse=True)
-                elif sort_by == "인기순":
-                    normal_videos.sort(key=lambda x: int(x['details'].get('statistics', {}).get('viewCount', '0')), reverse=True)
-                    shorts.sort(key=lambda x: int(x['details'].get('statistics', {}).get('viewCount', '0')), reverse=True)
-                elif sort_by == "제목순":
-                    normal_videos.sort(key=lambda x: x['search_snippet']['title'])
-                    shorts.sort(key=lambda x: x['search_snippet']['title'])
-                
-                # 일반 동영상 표시
-                st.subheader("🎞️ 일반 동영상", anchor="일반-동영상")
-                if not normal_videos:
-                    st.info("일반 동영상이 없습니다.")
-                else:
-                    for idx, video_data in enumerate(normal_videos, 1):
-                        snippet = video_data['search_snippet']
-                        details = video_data['details']
-                        video_id = details['id']
-                        statistics = details.get('statistics', {})
-                        content_details = details.get('contentDetails', {})
-                        
-                        view_count = statistics.get('viewCount', '0')
-                        like_count = statistics.get('likeCount', '0')
-                        duration_str = content_details.get('duration', 'PT0S')
-                        duration = format_duration(duration_str)
-                        published_at = format_date(snippet['publishedAt'])
-                        
-                        st.markdown(f'''
-                        <div class="video-card">
-                            <div class="video-card-content">
-                                <img src="{snippet['thumbnails']['medium']['url']}" class="video-thumbnail">
-                                <div class="video-info">
-                                    <h3><a href="https://www.youtube.com/watch?v={video_id}" target="_blank">{idx}. {snippet['title']}</a></h3>
-                                    <p>{snippet['description'][:150]}...</p>
-                                    <div class="video-meta">
-                                        조회수: {format_stat(view_count)} | 좋아요: {format_stat(like_count)} | 길이: {duration} | 업로드: {published_at}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        ''', unsafe_allow_html=True)
-                
-                # Shorts 표시
-                st.subheader("📱 Shorts", anchor="shorts")
-                if not shorts:
-                    st.info("Shorts가 없습니다.")
-                else:
-                    for idx, video_data in enumerate(shorts, 1):
-                        snippet = video_data['search_snippet']
-                        details = video_data['details']
-                        video_id = details['id']
-                        statistics = details.get('statistics', {})
-                        content_details = details.get('contentDetails', {})
-                        
-                        view_count = statistics.get('viewCount', '0')
-                        like_count = statistics.get('likeCount', '0')
-                        duration_str = content_details.get('duration', 'PT0S')
-                        duration = format_duration(duration_str)
-                        published_at = format_date(snippet['publishedAt'])
-                        
-                        st.markdown(f'''
-                        <div class="video-card">
-                            <div class="video-card-content">
-                                <img src="{snippet['thumbnails']['medium']['url']}" class="video-thumbnail">
-                                <div class="video-info">
-                                    <h3><a href="https://www.youtube.com/watch?v={video_id}" target="_blank">{idx}. {snippet['title']} 📱</a></h3>
-                                    <p>{snippet['description'][:150]}...</p>
-                                    <div class="video-meta">
-                                        조회수: {format_stat(view_count)} | 좋아요: {format_stat(like_count)} | 길이: {duration} | 업로드: {published_at}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        ''', unsafe_allow_html=True)
-                
-                # 팟캐스트 표시
-                if podcast_videos_data:
-                    st.subheader("🎧 팟캐스트")
-                    for idx, item in enumerate(podcast_videos_data, 1):
-                        snippet = item['snippet']
-                        video_id = snippet['resourceId']['videoId']
-                        published_at = format_date(snippet['publishedAt'])
-                        
-                        # 팟캐스트는 상세 정보가 없으므로 일부 정보만 표시합니다.
-                        # 필요하다면 fetch_and_cache_youtube_data에서 팟캐스트 동영상도 상세 정보를 가져올 수 있습니다.
-                        st.markdown(f'''
-                        <div class="video-card">
-                            <div class="video-card-content">
-                                <img src="{snippet['thumbnails']['medium']['url']}" class="video-thumbnail">
-                                <div class="video-info">
-                                    <h3><a href="https://www.youtube.com/watch?v={video_id}" target="_blank">{idx}. {snippet['title']} 🎧</a></h3>
-                                    <p>{snippet['description'][:150]}...</p>
-                                    <div class="video-meta">
-                                        업로드: {published_at}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        ''', unsafe_allow_html=True)
-                
+    videos = data.get("videos", [])
+    if videos:
+        tab1, tab2 = st.tabs(["🎬 모든 동영상", "🎙️ 팟캐스트"])
+        with tab1:
+            st.subheader("전체 동영상 목록")
+            # This is a simplified view. Add search/sort/filter as needed.
+            for video_data in videos:
+                snippet = video_data.get('search_snippet', {})
+                details = video_data.get('details', {})
+                video_id = details.get('id', '')
+                st.markdown(f"#### [{snippet.get('title')}] (https://www.youtube.com/watch?v={video_id})")
+                st.image(snippet.get('thumbnails', {}).get('medium', {}).get('url'))
+                st.write(snippet.get('description')[:200])
+        
+        with tab2:
+            st.subheader("팟캐스트 목록")
+            podcast_videos = data.get("podcast_videos", [])
+            if podcast_videos:
+                 for item in podcast_videos:
+                    snippet = item.get('snippet', {})
+                    video_id = snippet.get('resourceId', {}).get('videoId', '')
+                    st.markdown(f"#### [{snippet.get('title')}] (https://www.youtube.com/watch?v={video_id})")
+                    st.image(snippet.get('thumbnails', {}).get('medium', {}).get('url'))
             else:
-                st.warning("표시할 동영상이 없습니다. 채널에 동영상을 업로드했는지 확인해주세요.")
-            st.markdown('</div>', unsafe_allow_html=True)
-
-    # 푸터
-    st.markdown("---")
-    st.markdown("""
-    <div style="text-align: center; color: #666; padding: 2rem;">
-        <p>© 2025 HaneulCCM. 모든 권리 보유. Powered by Jiwoosoft.</p>
-        <p>CCM 은혜의 찬양으로 하나님을 찬양합니다.</p>
-    </div>
-    """, unsafe_allow_html=True)
+                st.info("팟캐스트 동영상이 없습니다.")
+    else:
+        st.warning("표시할 동영상이 없습니다. 채널 정보를 성공적으로 불러왔는지 확인해주세요.")
 
 if __name__ == "__main__":
     main() 
