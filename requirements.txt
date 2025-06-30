@@ -1,5 +1,5 @@
 streamlit
 requests
 Pillow
-python-isodate
+isodate
 pandas
