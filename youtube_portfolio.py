@@ -358,34 +358,26 @@ def format_duration(duration_str):
 # --- Firebase 초기화 함수 ---
 @st.cache_resource
 def initialize_firebase():
-    """
-    Streamlit Secrets에서 Firebase 서비스 계정 키를 읽어와 앱을 초기화합니다.
-    @st.cache_resource를 사용하여 앱 실행 동안 단 한 번만 실행되도록 합니다.
-    """
-    st.info("1. Firebase 초기화 함수 시작")
+    """Firebase 앱을 초기화하고 Firestore 클라이언트 객체를 반환합니다."""
     try:
         if "firebase_credentials" in st.secrets and "firebase_database" in st.secrets:
-            st.info("2. 'firebase_credentials'와 'firebase_database' 키를 찾았습니다.")
             creds_dict = dict(st.secrets["firebase_credentials"])
             
             if creds_dict and all(isinstance(v, str) for v in creds_dict.values()):
-                st.info("3. Firebase 인증 정보가 유효한 딕셔너리 형식입니다.")
                 if not firebase_admin._apps:
                     cred = credentials.Certificate(creds_dict)
                     firebase_admin.initialize_app(cred, {
                         'databaseURL': st.secrets["firebase_database"]["databaseURL"]
                     })
-                    st.info("4. Firebase 앱이 성공적으로 초기화되었습니다.")
                 return firestore.client()
             else:
-                st.error(f"Firebase 인증 정보가 비어있거나, 올바른 형식이 아닙니다. Secrets에 입력한 내용이 [firebase_credentials] 섹션 형식인지 확인해주세요.")
+                st.error("Firebase 인증 정보 형식이 올바르지 않습니다. Secrets 설정을 확인해주세요.")
                 return None
         else:
-            st.error("Secrets에서 'firebase_credentials' 또는 'firebase_database' 키를 찾을 수 없습니다.")
+            st.error("Secrets에서 Firebase 설정 키를 찾을 수 없습니다.")
             return None
     except Exception as e:
-        st.error(f"Firebase 처리 중 심각한 오류 발생: {e}")
-        st.info("Secrets에 입력한 키의 내용에 오타가 없는지, JSON 파일의 내용과 완전히 일치하는지 확인해주세요.")
+        st.error(f"Firebase 초기화 중 오류 발생: {e}")
         return None
 
 def get_and_increment_visitor_count(db):
