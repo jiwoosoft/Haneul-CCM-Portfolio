@@ -1,5 +1,6 @@
-streamlit
-requests
-Pillow
-isodate
-pandas
+streamlit==1.36.0
+requests==2.32.3
+Pillow==10.4.0
+isodate==0.6.1
+pandas==2.2.2
+firebase-admin==6.5.0
