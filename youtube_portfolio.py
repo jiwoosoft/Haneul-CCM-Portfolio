@@ -203,6 +203,22 @@ def format_duration(duration_str):
 
 # --- 7. 메인 애플리케이션 실행 ---
 def main():
+    st.subheader("🐞 디버깅 정보 (문제 해결 후 삭제됩니다)")
+    try:
+        st.write("`st.secrets`에 로드된 최상위 키:", list(st.secrets.keys()))
+        if "youtube_api" in st.secrets:
+            st.success("`youtube_api` 섹션을 찾았습니다.")
+            if "api_key" in st.secrets.youtube_api:
+                st.success("`youtube_api` 섹션 안에서 `api_key`도 찾았습니다!")
+            else:
+                st.error("`youtube_api` 섹션 안에 `api_key`가 없습니다.")
+                st.write("`youtube_api`의 키 목록:", list(st.secrets.youtube_api.keys()))
+        else:
+            st.error("Secrets에 `youtube_api` 섹션이 없습니다.")
+    except Exception as e:
+        st.error(f"디버깅 정보 표시 중 오류 발생: {e}")
+    st.markdown("---")
+
     db = initialize_firebase()
     
     api_data = get_combined_api_data(YOUTUBE_API_KEY, CHANNEL_ID, PODCAST_PLAYLIST_ID)
