@@ -575,6 +575,31 @@ def main():
                     normal_videos.sort(key=lambda x: x['search_snippet']['title'])
                     shorts.sort(key=lambda x: x['search_snippet']['title'])
                 
+                # 팟캐스트 표시
+                if podcast_videos_data:
+                    st.subheader("🎧 팟캐스트")
+                    for idx, item in enumerate(podcast_videos_data, 1):
+                        snippet = item['snippet']
+                        video_id = snippet['resourceId']['videoId']
+                        published_at = format_date(snippet['publishedAt'])
+                        
+                        # 팟캐스트는 상세 정보가 없으므로 일부 정보만 표시합니다.
+                        # 필요하다면 fetch_and_cache_youtube_data에서 팟캐스트 동영상도 상세 정보를 가져올 수 있습니다.
+                        st.markdown(f'''
+                        <div class="video-card">
+                            <div class="video-card-content">
+                                <img src="{snippet['thumbnails']['medium']['url']}" class="video-thumbnail">
+                                <div class="video-info">
+                                    <h3><a href="https://www.youtube.com/watch?v={video_id}" target="_blank">{idx}. {snippet['title']} 🎧</a></h3>
+                                    <p>{snippet['description'][:150]}...</p>
+                                    <div class="video-meta">
+                                        업로드: {published_at}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        ''', unsafe_allow_html=True)
+
                 # 일반 동영상 표시
                 st.subheader("🎞️ 일반 동영상", anchor="일반-동영상")
                 if not normal_videos:
@@ -635,31 +660,6 @@ def main():
                                     <p>{snippet['description'][:150]}...</p>
                                     <div class="video-meta">
                                         조회수: {format_stat(view_count)} | 좋아요: {format_stat(like_count)} | 길이: {duration} | 업로드: {published_at}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        ''', unsafe_allow_html=True)
-                
-                # 팟캐스트 표시
-                if podcast_videos_data:
-                    st.subheader("🎧 팟캐스트")
-                    for idx, item in enumerate(podcast_videos_data, 1):
-                        snippet = item['snippet']
-                        video_id = snippet['resourceId']['videoId']
-                        published_at = format_date(snippet['publishedAt'])
-                        
-                        # 팟캐스트는 상세 정보가 없으므로 일부 정보만 표시합니다.
-                        # 필요하다면 fetch_and_cache_youtube_data에서 팟캐스트 동영상도 상세 정보를 가져올 수 있습니다.
-                        st.markdown(f'''
-                        <div class="video-card">
-                            <div class="video-card-content">
-                                <img src="{snippet['thumbnails']['medium']['url']}" class="video-thumbnail">
-                                <div class="video-info">
-                                    <h3><a href="https://www.youtube.com/watch?v={video_id}" target="_blank">{idx}. {snippet['title']} 🎧</a></h3>
-                                    <p>{snippet['description'][:150]}...</p>
-                                    <div class="video-meta">
-                                        업로드: {published_at}
                                     </div>
                                 </div>
                             </div>
