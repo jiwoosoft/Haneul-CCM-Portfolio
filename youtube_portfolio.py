@@ -62,7 +62,7 @@ st.markdown(get_css(), unsafe_allow_html=True)
 # --- 3. 전역 변수 및 보안 설정 ---
 YOUTUBE_API_KEY = st.secrets.get("youtube_api", {}).get("api_key", "")
 CHANNEL_ID = "UC4nfPrwy8bi0q-eryODxiGQ"
-PODCAST_PLAYLIST_ID = "PL-3k4y9L5-k19y3Yn8a2nB_yS1E8A9GR"
+PODCAST_PLAYLIST_ID = "PLxrh8feMUU_3FKqIMIS90k6-W33a-OG6N"
 
 # --- 4. 데이터 처리 및 API 호출 함수 (올바른 캐시 구조) ---
 
@@ -209,6 +209,21 @@ def format_duration(duration_str):
 # --- 7. 메인 애플리케이션 실행 ---
 def main():
     db = initialize_firebase()
+
+    # --- 임시 최종 진단 코드 ---
+    st.info("🐞 최종 진단: '동영상 검색' API를 직접 호출해봅니다.")
+    try:
+        search_url = f"https://www.googleapis.com/youtube/v3/search?part=snippet&channelId={CHANNEL_ID}&maxResults=5&key={YOUTUBE_API_KEY}"
+        response = requests.get(search_url)
+        response.raise_for_status()
+        search_data = response.json()
+        st.success("'동영상 검색' API 호출 성공!")
+        st.json(search_data)
+    except Exception as e:
+        st.error("'동영상 검색' API 호출 실패!")
+        st.exception(e)
+    st.markdown("---")
+    # --- 임시 최종 진단 코드 끝 ---
     
     api_data = get_combined_api_data(YOUTUBE_API_KEY, CHANNEL_ID, PODCAST_PLAYLIST_ID)
     
