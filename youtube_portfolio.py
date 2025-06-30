@@ -111,42 +111,39 @@ st.markdown(get_css_theme(), unsafe_allow_html=True)
 # --- 보안 설정: st.secrets에서 API 정보 가져오기 ---
 YOUTUBE_API_KEY = st.secrets.get("YOUTUBE_API_KEY", "")
 CHANNEL_ID = st.secrets.get("CHANNEL_ID", "")
-PODCAST_PLAYLIST_ID = st.secrets.get("PODCAST_PLAYLIST_ID", "")
+PODCAST_PLAYLIST_ID = st.secrets.get("PODCAST_PLAYLIST_ID", "PL-3k4y9L5-k19y3Yn8a2nB_yS1E8A9GR")
 
-# 데이터 파일 경로
-DATA_FILE = "channel_data.json"
+# 데이터 파일 경로 (이제 사용하지 않음)
+# DATA_FILE = "channel_data.json"
 
 def get_default_data():
-    """데이터 파일이 없거나 손상되었을 때 사용할 기본 데이터 구조를 반환합니다."""
+    """데이터가 없을 때 사용할 기본 데이터 구조를 반환합니다."""
     return {
         "channel_info": {
-            "snippet": {"title": "Haneul CCM", "description": "CCM 작곡가 하늘의 음악 세계에 오신 것을 환영합니다."},
+            "snippet": {"title": "Haneul CCM", "description": "CCM 작곡가 하늘의 음악 세계에 오신 것을 환영합니다. 이곳에서 저의 다양한 음악과 활동을 만나보세요."},
             "statistics": {"subscriberCount": "0", "videoCount": "0", "viewCount": "0"}
         },
         "videos": [],
         "podcast_videos": [],
-        "last_updated": "1970-01-01T00:00:00Z"  # 최초 실행 시 무조건 업데이트되도록 아주 오래된 시간으로 설정
+        "last_updated": "1970-01-01T00:00:00Z"
     }
 
-def load_channel_data():
-    """JSON 파일에서 채널 데이터를 로드하고 데이터 구조를 검증합니다."""
-    if os.path.exists(DATA_FILE):
-        try:
-            with open(DATA_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                # 데이터 구조 검증
-                videos = data.get("videos", [])
-                if videos:
-                    first_video = videos[0]
-                    if "search_snippet" not in first_video or "details" not in first_video:
-                        st.warning("이전 버전의 데이터 파일(channel_data.json)이 감지되었습니다. 새 데이터 구조로 업데이트가 필요합니다.")
-                        return get_default_data()
-                
-                if "channel_info" in data and "videos" in data:
-                    return data
-        except (json.JSONDecodeError, FileNotFoundError):
-            st.warning("데이터 파일을 읽을 수 없어 기본 데이터로 시작합니다.")
-    return get_default_data()
+def load_data_from_firestore(db):
+    """Firestore에서 캐시된 채널 데이터를 로드합니다."""
+    if db is None:
+        st.warning("데이터베이스에 연결할 수 없어 기본 데이터를 표시합니다.")
+        return get_default_data()
+    try:
+        doc_ref = db.collection('app_cache').document('youtube_data')
+        doc = doc_ref.get()
+        if doc.exists:
+            return doc.to_dict()
+        else:
+            # Firestore에 데이터가 없는 첫 실행 상태
+            return get_default_data()
+    except Exception as e:
+        st.error(f"데이터 로드 중 오류 발생: {e}")
+        return get_default_data()
 
 def needs_update(data):
     """데이터를 마지막으로 업데이트한 지 24시간이 지났는지 확인합니다."""
@@ -155,12 +152,15 @@ def needs_update(data):
         # Python 3.10 or lower doesn't handle 'Z' suffix well, so we replace it
         last_updated = datetime.fromisoformat(last_updated_str.replace('Z', '+00:00'))
         return datetime.now(last_updated.tzinfo) - last_updated > timedelta(hours=24)
-    except Exception as e:
-        st.error(f"업데이트 시간 확인 중 오류 발생: {e}")
+    except Exception:
         return True # 오류 발생 시 업데이트 시도
 
-def fetch_and_cache_youtube_data():
-    """YouTube API에서 최신 데이터를 가져와 JSON 파일로 저장(캐시)합니다."""
+def fetch_and_cache_youtube_data(db):
+    """YouTube API에서 최신 데이터를 가져와 Firestore에 저장(캐시)합니다."""
+    if db is None:
+        st.error("데이터베이스에 연결되지 않아 캐시를 업데이트할 수 없습니다.")
+        return None
+
     # 1. 채널 정보 가져오기
     channel_info = get_channel_info()
     if not channel_info:
@@ -174,7 +174,7 @@ def fetch_and_cache_youtube_data():
     # 이렇게 해야 할당량 초과 등으로 빈 목록이 기존 캐시를 덮어쓰는 것을 방지
     video_count_stat = int(channel_info.get('statistics', {}).get('videoCount', '0'))
     if video_count_stat > 0 and not all_videos_search:
-        print("채널에 영상이 있지만 목록을 가져오지 못했습니다. API 할당량 초과일 수 있으므로 캐싱을 중단합니다.")
+        st.warning("채널에 영상이 있지만 목록을 가져오지 못했습니다. API 할당량 초과일 수 있으므로 캐싱을 중단합니다.")
         return None
         
     video_ids = [v['id']['videoId'] for v in all_videos_search]
@@ -200,13 +200,14 @@ def fetch_and_cache_youtube_data():
         "last_updated": datetime.utcnow().isoformat() + 'Z'
     }
 
-    # 5. 파일에 저장
+    # 5. Firestore에 데이터 저장
     try:
-        with open(DATA_FILE, 'w', encoding='utf-8') as f:
-            json.dump(new_data, f, ensure_ascii=False, indent=4)
+        doc_ref = db.collection('app_cache').document('youtube_data')
+        doc_ref.set(new_data)
+        st.toast("✅ 채널 정보가 성공적으로 업데이트 및 저장되었습니다!")
         return new_data
     except Exception as e:
-        st.error(f"캐시 파일 저장 중 오류가 발생했습니다: {e}")
+        st.error(f"Firestore에 캐시 데이터 저장 중 오류 발생: {e}")
         return None
 
 def get_channel_info():
@@ -403,23 +404,26 @@ def get_and_increment_visitor_count(db):
         return "N/A"
 
 def main():
-    # --- 데이터 로딩 및 캐시 관리 ---
-    channel_data = load_channel_data()
+    """메인 애플리케이션 함수"""
+    # --- 초기화 ---
+    db = initialize_firebase()
 
-    if needs_update(channel_data):
-        with st.spinner("최신 YouTube 데이터를 동기화하는 중입니다... (API 할당량 초과 시 이전 데이터 표시)"):
-            updated_data = fetch_and_cache_youtube_data()
-        
-        if updated_data:
-            channel_data = updated_data
-            st.success("데이터를 최신 상태로 업데이트했습니다!")
+    # --- 데이터 로딩 및 캐시 관리 (Firebase 사용) ---
+    data = load_data_from_firestore(db)
+
+    # 앱 시작 시 또는 새로고침 시 업데이트 필요 여부 확인
+    if needs_update(data):
+        st.toast("최신 채널 정보를 가져오는 중... ⏳")
+        new_data = fetch_and_cache_youtube_data(db)
+        if new_data:
+            data = new_data
         else:
-            st.warning("데이터를 새로고침하지 못했습니다. API 할당량이 초과되었을 수 있습니다. 마지막으로 저장된 데이터를 표시합니다.")
+            st.warning("데이터 업데이트에 실패했습니다. 잠시 후 다시 시도해주세요. (API 할당량 초과일 수 있습니다)")
 
-    # --- 채널 정보 파싱 ---
-    channel_info_data = channel_data.get("channel_info", get_default_data()["channel_info"])
-    stats = channel_info_data.get('statistics', {})
-    title = channel_info_data.get('snippet', {}).get('title', 'Haneul CCM')
+    # 필요한 데이터 추출
+    channel_info = data.get("channel_info", get_default_data()["channel_info"])
+    stats = channel_info.get('statistics', {})
+    title = channel_info.get('snippet', {}).get('title', 'Haneul CCM')
     subscriber_count = stats.get('subscriberCount', '0')
     video_count = stats.get('videoCount', '0')
     view_count = stats.get('viewCount', '0')
@@ -440,7 +444,6 @@ def main():
         st.markdown(f"**총 조회수:** {format_stat(view_count)}")
 
         # --- 방문자 카운터 표시 ---
-        db = initialize_firebase()
         visitor_count = get_and_increment_visitor_count(db)
         if visitor_count != "N/A":
             st.markdown(f"**방문자 수:** {visitor_count:,}")
@@ -518,8 +521,8 @@ def main():
             """, unsafe_allow_html=True)
             
             # API에서 동영상 가져오기 -> 캐시된 데이터 사용으로 변경
-            all_videos_data = channel_data.get("videos", [])
-            podcast_videos_data = channel_data.get("podcast_videos", [])
+            all_videos_data = data.get("videos", [])
+            podcast_videos_data = data.get("podcast_videos", [])
             
             if all_videos_data:
                 # Shorts/일반 동영상 분리
