@@ -362,24 +362,34 @@ def initialize_firebase():
     Streamlit Secrets에서 Firebase 서비스 계정 키를 읽어와 앱을 초기화합니다.
     @st.cache_resource를 사용하여 앱 실행 동안 단 한 번만 실행되도록 합니다.
     """
+    st.info("1. Firebase 초기화 함수 시작")
     try:
-        # st.secrets에서 키가 문자열이 아닌 딕셔너리 형태로 로드될 경우를 대비
-        firebase_creds_dict = st.secrets.get("firebase_credentials")
-
-        if not firebase_creds_dict:
-            st.warning("Secrets에서 Firebase 인증 정보를 찾을 수 없습니다. 방문자 카운터가 비활성화됩니다.")
+        if "firebase_credentials" not in st.secrets:
+            st.error("Secrets에 'firebase_credentials' 키가 없습니다. 키 이름이 정확한지 확인해주세요.")
             return None
+
+        st.info("2. 'firebase_credentials' 키를 찾았습니다.")
+        firebase_creds_dict = st.secrets.get("firebase_credentials")
         
-        # 이미 초기화되었는지 확인
+        if not firebase_creds_dict or not isinstance(firebase_creds_dict, dict):
+            st.error(f"Firebase 인증 정보가 비어있거나, 올바른 형식이 아닙니다. (타입: {type(firebase_creds_dict)})")
+            st.info("Secrets에 입력한 내용이 [firebase_credentials] 섹션 형식인지 확인해주세요.")
+            return None
+
+        st.info(f"3. 인증 정보 로드 성공 (타입: {type(firebase_creds_dict)}). project_id: {firebase_creds_dict.get('project_id')}")
+
         if not firebase_admin._apps:
+            st.info("4. Firebase 앱 초기화를 시도합니다...")
             cred = credentials.Certificate(firebase_creds_dict)
+            st.info("5. 인증서 객체 생성 성공.")
             firebase_admin.initialize_app(cred)
-        
-        # st.success("Firebase에 성공적으로 연결되었습니다!") # 디버깅 완료 후 주석 처리 가능
+            st.info("6. Firebase 앱 초기화 완료.")
+
+        st.success("7. Firebase 연결에 최종 성공했습니다!")
         return firestore.client()
     except Exception as e:
-        st.error(f"Firebase 초기화 중 오류 발생: {e}")
-        st.info("Secrets에 입력한 firebase_credentials 키의 형식이 올바른지, 다운로드한 JSON 파일의 내용과 일치하는지 다시 한 번 확인해주세요.")
+        st.error(f"Firebase 처리 중 심각한 오류 발생: {e}")
+        st.info("Secrets에 입력한 키의 내용에 오타가 없는지, JSON 파일의 내용과 완전히 일치하는지 확인해주세요.")
         return None
 
 def get_and_increment_visitor_count(db):
