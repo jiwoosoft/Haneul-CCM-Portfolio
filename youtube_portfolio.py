@@ -210,25 +210,10 @@ def format_duration(duration_str):
 def main():
     db = initialize_firebase()
 
-    # --- 임시 최종 진단 코드 ---
-    st.info("🐞 최종 진단: '동영상 검색' API를 직접 호출해봅니다.")
-    try:
-        search_url = f"https://www.googleapis.com/youtube/v3/search?part=snippet&channelId={CHANNEL_ID}&maxResults=5&key={YOUTUBE_API_KEY}"
-        response = requests.get(search_url)
-        response.raise_for_status()
-        search_data = response.json()
-        st.success("'동영상 검색' API 호출 성공!")
-        st.json(search_data)
-    except Exception as e:
-        st.error("'동영상 검색' API 호출 실패!")
-        st.exception(e)
-    st.markdown("---")
-    # --- 임시 최종 진단 코드 끝 ---
-    
     api_data = get_combined_api_data(YOUTUBE_API_KEY, CHANNEL_ID, PODCAST_PLAYLIST_ID)
     
     if not api_data:
-        st.error("YouTube API에서 데이터를 가져오는 데 실패했습니다. 채널이 비공개이거나 API 할당량을 초과했을 수 있습니다.")
+        st.error("YouTube API에서 데이터를 가져오는 데 실패했습니다. 채널이 비공개이거나 채널에 콘텐츠가 없을 수 있습니다.")
         return
 
     channel_info = api_data["channel_info"]
