@@ -398,7 +398,7 @@ def get_and_increment_visitor_count(db):
     DB가 없거나 오류 발생 시 None을 반환합니다.
     """
     if db is None:
-        return None
+        return None # 카운터 기능 비활성화
         
     try:
         doc_ref = db.collection("app_stats").document("visitors")
