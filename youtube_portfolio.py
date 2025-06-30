@@ -127,11 +127,19 @@ def get_default_data():
     }
 
 def load_channel_data():
-    """JSON 파일에서 채널 데이터를 로드합니다."""
+    """JSON 파일에서 채널 데이터를 로드하고 데이터 구조를 검증합니다."""
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
+                # 데이터 구조 검증
+                videos = data.get("videos", [])
+                if videos:
+                    first_video = videos[0]
+                    if "search_snippet" not in first_video or "details" not in first_video:
+                        st.warning("이전 버전의 데이터 파일(channel_data.json)이 감지되었습니다. 새 데이터 구조로 업데이트가 필요합니다.")
+                        return get_default_data()
+                
                 if "channel_info" in data and "videos" in data:
                     return data
         except (json.JSONDecodeError, FileNotFoundError):
@@ -202,14 +210,13 @@ def get_channel_info():
     
     try:
         response = requests.get(url, params=params)
-        if response.status_code == 200:
-            data = response.json()
-            if data['items']:
-                return data['items'][0]
-        else:
-            st.error(f"채널 정보 API 오류 (상태 코드 {response.status_code}): {response.text}")
-    except Exception as e:
-        st.error(f"채널 정보를 가져오는 중 오류가 발생했습니다: {e}")
+        response.raise_for_status()  # 200번대 코드가 아니면 예외 발생
+        data = response.json()
+        if data['items']:
+            return data['items'][0]
+    except requests.exceptions.RequestException as e:
+        # st.error 대신 콘솔에만 로그를 남기거나 아무것도 하지 않음
+        print(f"채널 정보 API 오류: {e}")
     
     return None
 
@@ -227,10 +234,10 @@ def get_videos():
     
     try:
         response = requests.get(url, params=params)
-        if response.status_code == 200:
-            return response.json()['items']
-    except Exception as e:
-        st.error(f"동영상 목록을 가져오는 중 오류가 발생했습니다: {e}")
+        response.raise_for_status()
+        return response.json()['items']
+    except requests.exceptions.RequestException as e:
+        print(f"동영상 목록을 가져오는 중 오류가 발생했습니다: {e}")
     
     return []
 
@@ -250,15 +257,12 @@ def get_video_details(video_ids):
         
         try:
             response = requests.get(url, params=params)
-            if response.status_code == 200:
-                data = response.json()
-                for item in data.get('items', []):
-                    details[item['id']] = item
-            else:
-                st.error(f"동영상 상세 정보 API 오류 (상태 코드 {response.status_code}): {response.text}")
-
-        except Exception as e:
-            st.error(f"동영상 상세 정보를 가져오는 중 오류가 발생했습니다: {e}")
+            response.raise_for_status()
+            data = response.json()
+            for item in data.get('items', []):
+                details[item['id']] = item
+        except requests.exceptions.RequestException as e:
+            print(f"동영상 상세 정보 API 오류: {e}")
     
     return details
 
@@ -292,9 +296,7 @@ def get_all_videos():
     try:
         while True:
             response = requests.get(url, params=params)
-            if response.status_code != 200:
-                st.error(f"동영상 목록 API 오류 (상태 코드 {response.status_code}): {response.text}")
-                break
+            response.raise_for_status()
             data = response.json()
             videos.extend(data.get('items', []))
             if 'nextPageToken' in data:
@@ -302,8 +304,8 @@ def get_all_videos():
             else:
                 break
         return videos
-    except Exception as e:
-        st.error(f"동영상 목록을 가져오는 중 오류가 발생했습니다: {e}")
+    except requests.exceptions.RequestException as e:
+        print(f"전체 동영상 목록을 가져오는 중 오류가 발생했습니다: {e}")
         return []
 
 def get_playlist_videos(playlist_id):
@@ -320,8 +322,7 @@ def get_playlist_videos(playlist_id):
     try:
         while True:
             response = requests.get(url, params=params)
-            if response.status_code != 200:
-                break
+            response.raise_for_status()
             data = response.json()
             videos.extend(data.get('items', []))
             if 'nextPageToken' in data:
@@ -329,8 +330,8 @@ def get_playlist_videos(playlist_id):
             else:
                 break
         return videos
-    except Exception as e:
-        st.error(f"플레이리스트 동영상을 가져오는 중 오류가 발생했습니다: {e}")
+    except requests.exceptions.RequestException as e:
+        print(f"플레이리스트 동영상을 가져오는 중 오류가 발생했습니다: {e}")
         return []
 
 def format_duration(duration_str):
@@ -349,13 +350,14 @@ def main():
     channel_data = load_channel_data()
 
     if needs_update(channel_data):
-        with st.spinner("최신 YouTube 데이터를 가져오는 중입니다... 잠시만 기다려주세요. (최대 1분 소요)"):
+        with st.spinner("최신 YouTube 데이터를 동기화하는 중입니다... (API 할당량 초과 시 이전 데이터 표시)"):
             updated_data = fetch_and_cache_youtube_data()
-            if updated_data:
-                channel_data = updated_data
-                st.success("데이터를 최신 상태로 업데이트했습니다!")
-            else:
-                st.warning("데이터 업데이트에 실패했습니다. 이전에 저장된 데이터를 표시합니다.")
+        
+        if updated_data:
+            channel_data = updated_data
+            st.success("데이터를 최신 상태로 업데이트했습니다!")
+        else:
+            st.warning("데이터를 새로고침하지 못했습니다. API 할당량이 초과되었을 수 있습니다. 마지막으로 저장된 데이터를 표시합니다.")
 
     # --- 채널 정보 파싱 ---
     channel_info_data = channel_data.get("channel_info", get_default_data()["channel_info"])
