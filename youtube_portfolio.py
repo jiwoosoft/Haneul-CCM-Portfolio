@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 from PIL import Image
 import io
@@ -114,27 +114,82 @@ PODCAST_PLAYLIST_ID = st.secrets.get("PODCAST_PLAYLIST_ID", "")
 # 데이터 파일 경로
 DATA_FILE = "channel_data.json"
 
+def get_default_data():
+    """데이터 파일이 없거나 손상되었을 때 사용할 기본 데이터 구조를 반환합니다."""
+    return {
+        "channel_info": {
+            "snippet": {"title": "Haneul CCM", "description": "CCM 작곡가 하늘의 음악 세계에 오신 것을 환영합니다."},
+            "statistics": {"subscriberCount": "0", "videoCount": "0", "viewCount": "0"}
+        },
+        "videos": [],
+        "podcast_videos": [],
+        "last_updated": "1970-01-01T00:00:00Z"  # 최초 실행 시 무조건 업데이트되도록 아주 오래된 시간으로 설정
+    }
+
 def load_channel_data():
-    """채널 데이터 로드"""
+    """JSON 파일에서 채널 데이터를 로드합니다."""
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            st.error(f"데이터 파일을 읽는 중 오류가 발생했습니다: {e}")
-    
-    # 기본 데이터 반환
-    return {
-        "channel_info": {
-            "title": "Haneul CCM",
-            "description": "CCM 작곡가 하늘의 음악 세계에 오신 것을 환영합니다.",
-            "subscriber_count": "1,234",
-            "video_count": "0",
-            "view_count": "0",
-            "last_updated": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        },
-        "videos": []
+                data = json.load(f)
+                if "channel_info" in data and "videos" in data:
+                    return data
+        except (json.JSONDecodeError, FileNotFoundError):
+            st.warning("데이터 파일을 읽을 수 없어 기본 데이터로 시작합니다.")
+    return get_default_data()
+
+def needs_update(data):
+    """데이터를 마지막으로 업데이트한 지 24시간이 지났는지 확인합니다."""
+    try:
+        last_updated_str = data.get("last_updated", "1970-01-01T00:00:00Z")
+        # Python 3.10 or lower doesn't handle 'Z' suffix well, so we replace it
+        last_updated = datetime.fromisoformat(last_updated_str.replace('Z', '+00:00'))
+        return datetime.now(last_updated.tzinfo) - last_updated > timedelta(hours=24)
+    except Exception as e:
+        st.error(f"업데이트 시간 확인 중 오류 발생: {e}")
+        return True # 오류 발생 시 업데이트 시도
+
+def fetch_and_cache_youtube_data():
+    """YouTube API에서 최신 데이터를 가져와 JSON 파일로 저장(캐시)합니다."""
+    # 1. 채널 정보 가져오기
+    channel_info = get_channel_info()
+    if not channel_info:
+        st.error("채널 정보를 가져올 수 없습니다. API 키와 채널 ID를 확인해주세요.")
+        return None
+
+    # 2. 모든 동영상 목록 가져오기
+    all_videos_search = get_all_videos()
+    video_ids = [v['id']['videoId'] for v in all_videos_search]
+    video_details = get_video_details(video_ids)
+
+    processed_videos = []
+    for video in all_videos_search:
+        video_id = video['id']['videoId']
+        if video_id in video_details:
+            processed_videos.append({
+                "search_snippet": video['snippet'],
+                "details": video_details[video_id]
+            })
+
+    # 3. 팟캐스트 플레이리스트 동영상 가져오기
+    podcast_playlist_items = get_playlist_videos(PODCAST_PLAYLIST_ID)
+
+    # 4. 최종 데이터 객체 생성
+    new_data = {
+        "channel_info": channel_info,
+        "videos": processed_videos,
+        "podcast_videos": podcast_playlist_items,
+        "last_updated": datetime.utcnow().isoformat() + 'Z'
     }
+
+    # 5. 파일에 저장
+    try:
+        with open(DATA_FILE, 'w', encoding='utf-8') as f:
+            json.dump(new_data, f, ensure_ascii=False, indent=4)
+        return new_data
+    except Exception as e:
+        st.error(f"캐시 파일 저장 중 오류가 발생했습니다: {e}")
+        return None
 
 def get_channel_info():
     """채널 기본 정보 가져오기"""
@@ -290,26 +345,26 @@ def format_duration(duration_str):
         return "0:00"
 
 def main():
-    # 채널 데이터 로드
+    # --- 데이터 로딩 및 캐시 관리 ---
     channel_data = load_channel_data()
-    channel_info_static = channel_data["channel_info"]
 
-    # 채널 정보 가져오기 (API 우선)
-    api_channel_info = get_channel_info()
-    if api_channel_info:
-        stats = api_channel_info.get('statistics', {})
-        title = api_channel_info.get('snippet', {}).get('title', 'Haneul CCM')
-        description = api_channel_info.get('snippet', {}).get('description', '')
-        subscriber_count = stats.get('subscriberCount', '0')
-        video_count = stats.get('videoCount', '0')
-        view_count = stats.get('viewCount', '0')
-    else:
-        # API 실패 시 정적 데이터 사용
-        title = channel_info_static['title']
-        description = channel_info_static['description']
-        subscriber_count = channel_info_static['subscriber_count']
-        video_count = channel_info_static['video_count']
-        view_count = channel_info_static['view_count']
+    if needs_update(channel_data):
+        with st.spinner("최신 YouTube 데이터를 가져오는 중입니다... 잠시만 기다려주세요. (최대 1분 소요)"):
+            updated_data = fetch_and_cache_youtube_data()
+            if updated_data:
+                channel_data = updated_data
+                st.success("데이터를 최신 상태로 업데이트했습니다!")
+            else:
+                st.warning("데이터 업데이트에 실패했습니다. 이전에 저장된 데이터를 표시합니다.")
+
+    # --- 채널 정보 파싱 ---
+    channel_info_data = channel_data.get("channel_info", get_default_data()["channel_info"])
+    stats = channel_info_data.get('statistics', {})
+    title = channel_info_data.get('snippet', {}).get('title', 'Haneul CCM')
+    description = channel_info_data.get('snippet', {}).get('description', '')
+    subscriber_count = stats.get('subscriberCount', '0')
+    video_count = stats.get('videoCount', '0')
+    view_count = stats.get('viewCount', '0')
 
     # CSS 적용
     st.markdown(get_css_theme(), unsafe_allow_html=True)
@@ -389,21 +444,17 @@ def main():
             </div>
             """, unsafe_allow_html=True)
             
-            # API에서 동영상 가져오기
-            videos = get_all_videos()
+            # API에서 동영상 가져오기 -> 캐시된 데이터 사용으로 변경
+            all_videos_data = channel_data.get("videos", [])
+            podcast_videos_data = channel_data.get("podcast_videos", [])
             
-            if videos:
-                # 동영상 상세 정보 가져오기
-                video_ids = [v['id']['videoId'] for v in videos]
-                video_details = get_video_details(video_ids)
-                
+            if all_videos_data:
                 # Shorts/일반 동영상 분리
                 shorts = []
                 normal_videos = []
                 
-                for video in videos:
-                    video_id = video['id']['videoId']
-                    details = video_details.get(video_id, {})
+                for video_data in all_videos_data:
+                    details = video_data.get('details', {})
                     content_details = details.get('contentDetails', {})
                     duration_str = content_details.get('duration', 'PT0S')
                     
@@ -414,45 +465,45 @@ def main():
                         seconds = 0
                     
                     if seconds <= 60:
-                        shorts.append((video, details))
+                        shorts.append(video_data)
                     else:
-                        normal_videos.append((video, details))
+                        normal_videos.append(video_data)
                 
-                # 팟캐스트 플레이리스트 동영상 가져오기
-                podcast_videos = get_playlist_videos(PODCAST_PLAYLIST_ID)
+                # 팟캐스트 플레이리스트 동영상 ID 추출
                 podcast_video_ids = set()
-                for item in podcast_videos:
+                for item in podcast_videos_data:
                     vid = item['snippet']['resourceId']['videoId']
                     podcast_video_ids.add(vid)
                 
                 # 일반/Shorts에서 팟캐스트 동영상 제외
-                normal_videos = [t for t in normal_videos if t[0]['id']['videoId'] not in podcast_video_ids]
-                shorts = [t for t in shorts if t[0]['id']['videoId'] not in podcast_video_ids]
+                normal_videos = [v for v in normal_videos if v['details']['id'] not in podcast_video_ids]
+                shorts = [v for v in shorts if v['details']['id'] not in podcast_video_ids]
                 
                 # 검색 필터 적용
                 if search_term:
-                    normal_videos = [t for t in normal_videos if search_term.lower() in t[0]['snippet']['title'].lower()]
-                    shorts = [t for t in shorts if search_term.lower() in t[0]['snippet']['title'].lower()]
+                    normal_videos = [v for v in normal_videos if search_term.lower() in v['search_snippet']['title'].lower()]
+                    shorts = [v for v in shorts if search_term.lower() in v['search_snippet']['title'].lower()]
                 
                 # 정렬 적용
                 if sort_by == "최신순":
-                    normal_videos.sort(key=lambda x: x[0]['snippet']['publishedAt'], reverse=True)
-                    shorts.sort(key=lambda x: x[0]['snippet']['publishedAt'], reverse=True)
+                    normal_videos.sort(key=lambda x: x['search_snippet']['publishedAt'], reverse=True)
+                    shorts.sort(key=lambda x: x['search_snippet']['publishedAt'], reverse=True)
                 elif sort_by == "인기순":
-                    normal_videos.sort(key=lambda x: int(x[1].get('statistics', {}).get('viewCount', '0')), reverse=True)
-                    shorts.sort(key=lambda x: int(x[1].get('statistics', {}).get('viewCount', '0')), reverse=True)
+                    normal_videos.sort(key=lambda x: int(x['details'].get('statistics', {}).get('viewCount', '0')), reverse=True)
+                    shorts.sort(key=lambda x: int(x['details'].get('statistics', {}).get('viewCount', '0')), reverse=True)
                 elif sort_by == "제목순":
-                    normal_videos.sort(key=lambda x: x[0]['snippet']['title'])
-                    shorts.sort(key=lambda x: x[0]['snippet']['title'])
+                    normal_videos.sort(key=lambda x: x['search_snippet']['title'])
+                    shorts.sort(key=lambda x: x['search_snippet']['title'])
                 
                 # 일반 동영상 표시
                 st.subheader("🎞️ 일반 동영상", anchor="일반-동영상")
                 if not normal_videos:
                     st.info("일반 동영상이 없습니다.")
                 else:
-                    for idx, (video, details) in enumerate(normal_videos, 1):
-                        snippet = video['snippet']
-                        video_id = video['id']['videoId']
+                    for idx, video_data in enumerate(normal_videos, 1):
+                        snippet = video_data['search_snippet']
+                        details = video_data['details']
+                        video_id = details['id']
                         statistics = details.get('statistics', {})
                         content_details = details.get('contentDetails', {})
                         
@@ -470,7 +521,7 @@ def main():
                                     <h3><a href="https://www.youtube.com/watch?v={video_id}" target="_blank">{idx}. {snippet['title']}</a></h3>
                                     <p>{snippet['description'][:150]}...</p>
                                     <div class="video-meta">
-                                        조회수: {int(view_count):,} | 좋아요: {int(like_count):,} | 길이: {duration} | 업로드: {published_at}
+                                        조회수: {format_stat(view_count)} | 좋아요: {format_stat(like_count)} | 길이: {duration} | 업로드: {published_at}
                                     </div>
                                 </div>
                             </div>
@@ -482,9 +533,10 @@ def main():
                 if not shorts:
                     st.info("Shorts가 없습니다.")
                 else:
-                    for idx, (video, details) in enumerate(shorts, 1):
-                        snippet = video['snippet']
-                        video_id = video['id']['videoId']
+                    for idx, video_data in enumerate(shorts, 1):
+                        snippet = video_data['search_snippet']
+                        details = video_data['details']
+                        video_id = details['id']
                         statistics = details.get('statistics', {})
                         content_details = details.get('contentDetails', {})
                         
@@ -502,7 +554,7 @@ def main():
                                     <h3><a href="https://www.youtube.com/watch?v={video_id}" target="_blank">{idx}. {snippet['title']} 📱</a></h3>
                                     <p>{snippet['description'][:150]}...</p>
                                     <div class="video-meta">
-                                        조회수: {int(view_count):,} | 좋아요: {int(like_count):,} | 길이: {duration} | 업로드: {published_at}
+                                        조회수: {format_stat(view_count)} | 좋아요: {format_stat(like_count)} | 길이: {duration} | 업로드: {published_at}
                                     </div>
                                 </div>
                             </div>
@@ -510,13 +562,15 @@ def main():
                         ''', unsafe_allow_html=True)
                 
                 # 팟캐스트 표시
-                if podcast_videos:
+                if podcast_videos_data:
                     st.subheader("🎧 팟캐스트")
-                    for idx, item in enumerate(podcast_videos, 1):
+                    for idx, item in enumerate(podcast_videos_data, 1):
                         snippet = item['snippet']
                         video_id = snippet['resourceId']['videoId']
                         published_at = format_date(snippet['publishedAt'])
                         
+                        # 팟캐스트는 상세 정보가 없으므로 일부 정보만 표시합니다.
+                        # 필요하다면 fetch_and_cache_youtube_data에서 팟캐스트 동영상도 상세 정보를 가져올 수 있습니다.
                         st.markdown(f'''
                         <div class="video-card">
                             <div class="video-card-content">
@@ -533,31 +587,7 @@ def main():
                         ''', unsafe_allow_html=True)
                 
             else:
-                # API 호출 실패 시 정적 데이터 사용
-                st.warning("YouTube API에서 동영상을 가져올 수 없어 샘플 데이터를 표시합니다.")
-                
-                data = load_channel_data()
-                sample_videos = data["videos"]
-                
-                for idx, video in enumerate(sample_videos, 1):
-                    st.markdown(f"""
-                    <div class="video-card">
-                        <div class="video-card-content">
-                            <img src="{video['thumbnail']}" class="video-thumbnail">
-                            <div class="video-info">
-                                <h3>
-                                    <a href="{video['youtube_url']}" target="_blank">
-                                        {idx}. {video['title']}
-                                    </a>
-                                </h3>
-                                <p>{video['description']}</p>
-                                <div class="video-meta">
-                                    조회수: {video['views']} | 좋아요: {video['likes']} | 길이: {video['duration']} | 업로드: {format_date(video['published_at'])}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                st.warning("표시할 동영상이 없습니다. 채널에 동영상을 업로드했는지 확인해주세요.")
             st.markdown('</div>', unsafe_allow_html=True)
 
     # 푸터
