@@ -315,13 +315,13 @@ def main():
     st.markdown(get_css_theme(), unsafe_allow_html=True)
 
     st.markdown('<h1 class="main-header">🎵 Haneul CCM Portfolio</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-header">CCM 작곡가 하늘의 음악 세계에 오신 것을 환영합니다</p>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-header">CCM 하늘빛 음악 세계에 오신 것을 환영합니다</p>', unsafe_allow_html=True)
 
     col1, col2 = st.columns([1, 2.5])
 
     with col1:
         st.header("🎵 채널 정보")
-        st.markdown(f"**채널명:** {title}")
+        st.markdown(f"**Youtube 채널명:** {title}")
         st.markdown(f"**구독자:** {format_stat(subscriber_count)}")
         st.markdown(f"**총 동영상:** {format_stat(video_count)}")
         st.markdown(f"**총 조회수:** {format_stat(view_count)}")
@@ -331,9 +331,9 @@ def main():
         search_term = st.text_input("검색어 입력", placeholder="검색어를 입력하세요...")
         
         st.header("📱 연락처")
-        st.markdown("**이메일:** contact@haneulccm.com")
-        st.markdown("**인스타그램:** @haneulccm")
-        st.markdown("**YouTube:** [Haneul CCM](https://www.youtube.com/@HaneulCCM)")
+        st.markdown("**이메일:** webmaster@jiwoosoft.com")
+        st.markdown("**홈페이지:** [www.Jiwoosoft.com](http://www.jiwoosoft.com)")
+        st.markdown("**YouTube:** [@HaneulCCM](https://www.youtube.com/@HaneulCCM)")
         
         st.header("🌙 테마 설정")
         st.toggle('다크 모드', key='dark_mode')
@@ -343,7 +343,7 @@ def main():
         with st.container():
             st.markdown(
                 f'''
-                <div style="padding: 2.5rem 1.5rem; background: linear-gradient(135deg, rgb(240, 147, 251) 0%, rgb(245, 87, 108) 100%); border-radius: 22px; text-align: center; color: white; position: relative; overflow: hidden; box-shadow: rgba(0, 0, 0, 0.1) 0px 8px 32px;">
+                <div style="padding: 2.5rem 1.5rem; background: linear-gradient(135deg, rgb(85, 111, 180) 0%, rgb(34, 57, 117) 100%); border-radius: 22px; text-align: center; color: white; position: relative; overflow: hidden; box-shadow: rgba(0, 0, 0, 0.1) 0px 8px 32px;">
                     <img src="CCM.png" style="position:absolute; left:0; top:0; width:100%; height:100%; object-fit:cover; opacity:0.18; filter:blur(4px); z-index:0;" />
                     <div style="position:relative; z-index:1;">
                         <h1 style="margin-bottom:0.5rem; font-size:2.6rem; font-weight:900; letter-spacing:0.02em;">{title}</h1>
@@ -368,12 +368,12 @@ def main():
             )
 
             # 바로가기 버튼
-            st.markdown("""
-            <div class="shortcut-buttons" style="margin-bottom:2.2rem;">
-                <a href="#동영상" class="shortcut-button">동영상</a>
-                <a href="#Shorts" class="shortcut-button">Shorts</a>
-            </div>
-            """, unsafe_allow_html=True)
+           # st.markdown("""
+           #<div class="shortcut-buttons" style="margin-bottom:2.2rem;">
+           #    <a href="#동영상" class="shortcut-button">동영상</a>
+           #    <a href="#Shorts" class="shortcut-button">Shorts</a>
+           #</div>
+           # """, unsafe_allow_html=True)
 
             # 동영상 리스트 전체를 하나의 div로 감싸기
             st.markdown('<div id="video-list">', unsafe_allow_html=True)
@@ -564,8 +564,8 @@ def main():
     st.markdown("---")
     st.markdown("""
     <div style="text-align: center; color: #666; padding: 2rem;">
-        <p>© 2024 Haneul CCM. 모든 권리 보유.</p>
-        <p>CCM 작곡과 찬양으로 하나님을 찬양합니다.</p>
+        <p>© 2025 HaneulCCM. 모든 권리 보유. Powered by Jiwoosoft.</p>
+        <p>CCM 은혜의 찬양으로 하나님을 찬양합니다.</p>
     </div>
     """, unsafe_allow_html=True)
 
