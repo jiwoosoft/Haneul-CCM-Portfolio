@@ -371,7 +371,6 @@ def main():
     channel_info_data = channel_data.get("channel_info", get_default_data()["channel_info"])
     stats = channel_info_data.get('statistics', {})
     title = channel_info_data.get('snippet', {}).get('title', 'Haneul CCM')
-    description = channel_info_data.get('snippet', {}).get('description', '')
     subscriber_count = stats.get('subscriberCount', '0')
     video_count = stats.get('videoCount', '0')
     view_count = stats.get('viewCount', '0')
@@ -406,13 +405,22 @@ def main():
     with col2:
         # 본문(채널카드+동영상리스트)
         with st.container():
+            # 이 아랫부분의 """...""" 안의 내용을 직접 수정하시면 됩니다.
+            # <br>은 줄바꿈(Enter)입니다.
+            main_description = """
+            ✝ [하늘빛] 채널에 오신 여러분을 환영합니다! ✝<br>
+            지친 마음에 위로가 되는 찬양을 들려드리고 싶습니다.<br><br>
+            하나님의 은혜와 사랑과 따뜻한 위로가<br>
+            여러분의 삶에 가득하길 간절히 기도합니다.
+            """
+
             st.markdown(
                 f'''
                 <div style="padding: 2.5rem 1.5rem; background: linear-gradient(135deg, rgb(85, 111, 180) 0%, rgb(34, 57, 117) 100%); border-radius: 22px; text-align: center; color: white; position: relative; overflow: hidden; box-shadow: rgba(0, 0, 0, 0.1) 0px 8px 32px;">
                     <img src="CCM.png" style="position:absolute; left:0; top:0; width:100%; height:100%; object-fit:cover; opacity:0.18; filter:blur(4px); z-index:0;" />
                     <div style="position:relative; z-index:1;">
                         <h1 style="margin-bottom:0.5rem; font-size:2.6rem; font-weight:900; letter-spacing:0.02em;">{title}</h1>
-                        <div style="font-size:1.15rem; color:#fff; opacity:0.92; margin-bottom:1.5rem; font-weight:400;">{description if description else '채널 소개글을 작성해 주세요.'}</div>
+                        <div style="font-size:1.15rem; color:#fff; opacity:0.92; margin-bottom:1.5rem; font-weight:400; line-height: 1.7;">{main_description}</div>
                         <div class="stats-container" style="justify-content:center; gap:3.5rem; background:rgba(255,255,255,0.10); margin-bottom:0.5rem;">
                             <div class="stat-item">
                                 <div class="stat-number">{format_stat(subscriber_count)}</div>
