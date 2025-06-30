@@ -364,33 +364,33 @@ def initialize_firebase():
     """
     st.info("1. Firebase 초기화 함수 시작")
     try:
-        if "firebase_credentials" not in st.secrets:
-            st.error("Secrets에 'firebase_credentials' 키가 없습니다. 키 이름이 정확한지 확인해주세요.")
-            return None
+        if "firebase_credentials" in st.secrets:
+            st.info("2. 'firebase_credentials' 키를 찾았습니다.")
+            creds_dict = dict(st.secrets["firebase_credentials"])
+            
+            # 모든 키와 값이 문자열인지 확인 (디버깅용)
+            # for key, value in creds_dict.items():
+            #     st.write(f"Key: {key}, Type: {type(value)}")
 
-        st.info("2. 'firebase_credentials' 키를 찾았습니다.")
-        firebase_creds_dict = st.secrets.get("firebase_credentials")
-        
-        if not firebase_creds_dict or not isinstance(firebase_creds_dict, dict):
-            st.error(f"Firebase 인증 정보가 비어있거나, 올바른 형식이 아닙니다. (타입: {type(firebase_creds_dict)})")
-            st.info("Secrets에 입력한 내용이 [firebase_credentials] 섹션 형식인지 확인해주세요.")
-            return None
-
-        st.info(f"3. 인증 정보 로드 성공 (타입: {type(firebase_creds_dict)}). project_id: {firebase_creds_dict.get('project_id')}")
-
-        if not firebase_admin._apps:
-            st.info("4. Firebase 앱 초기화를 시도합니다...")
-            cred = credentials.Certificate(firebase_creds_dict)
-            st.info("5. 인증서 객체 생성 성공.")
-            firebase_admin.initialize_app(cred)
-            st.info("6. Firebase 앱 초기화 완료.")
-
-        st.success("7. Firebase 연결에 최종 성공했습니다!")
-        return firestore.client()
+            if creds_dict and all(isinstance(v, str) for v in creds_dict.values()):
+                st.info("3. Firebase 인증 정보가 유효한 딕셔너리 형식입니다.")
+                cred = credentials.Certificate(creds_dict)
+                firebase_admin.initialize_app(cred, {
+                    'databaseURL': st.secrets["firebase_database"]["databaseURL"]
+                })
+                st.info("4. Firebase 앱이 성공적으로 초기화되었습니다.")
+                return True
+            else:
+                st.error(f"Firebase 인증 정보가 비어있거나, 올바른 형식이 아닙니다. Secrets에 입력한 내용이 [firebase_credentials] 섹션 형식인지 확인해주세요.")
+                # st.error(f"인증 정보 타입: {type(st.secrets['firebase_credentials'])}")
+                return False
+        else:
+            st.error("Secrets에서 'firebase_credentials' 키를 찾을 수 없습니다.")
+            return False
     except Exception as e:
         st.error(f"Firebase 처리 중 심각한 오류 발생: {e}")
         st.info("Secrets에 입력한 키의 내용에 오타가 없는지, JSON 파일의 내용과 완전히 일치하는지 확인해주세요.")
-        return None
+        return False
 
 def get_and_increment_visitor_count(db):
     """
