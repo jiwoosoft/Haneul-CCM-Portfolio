@@ -353,6 +353,58 @@ def format_duration(duration_str):
     except:
         return "0:00"
 
+# --- Firebase 초기화 함수 ---
+@st.cache_resource
+def initialize_firebase():
+    """
+    Streamlit Secrets에서 Firebase 서비스 계정 키를 읽어와 앱을 초기화합니다.
+    @st.cache_resource를 사용하여 앱 실행 동안 단 한 번만 실행되도록 합니다.
+    """
+    try:
+        # st.secrets에서 키가 문자열이 아닌 딕셔너리 형태로 로드될 경우를 대비
+        firebase_creds_dict = st.secrets.get("firebase_credentials")
+
+        if not firebase_creds_dict:
+            st.warning("Secrets에서 Firebase 인증 정보를 찾을 수 없습니다. 방문자 카운터가 비활성화됩니다.")
+            return None
+        
+        # 이미 초기화되었는지 확인
+        if not firebase_admin._apps:
+            cred = credentials.Certificate(firebase_creds_dict)
+            firebase_admin.initialize_app(cred)
+        
+        # st.success("Firebase에 성공적으로 연결되었습니다!") # 디버깅 완료 후 주석 처리 가능
+        return firestore.client()
+    except Exception as e:
+        st.error(f"Firebase 초기화 중 오류 발생: {e}")
+        st.info("Secrets에 입력한 firebase_credentials 키의 형식이 올바른지, 다운로드한 JSON 파일의 내용과 일치하는지 다시 한 번 확인해주세요.")
+        return None
+
+def get_and_increment_visitor_count(db):
+    """
+    Firestore에서 방문자 수를 가져오고 1 증가시킨 후 반환합니다.
+    DB가 없거나 오류 발생 시 None을 반환합니다.
+    """
+    if db is None:
+        return None
+        
+    try:
+        doc_ref = db.collection("app_stats").document("visitors")
+        doc = doc_ref.get()
+
+        if doc.exists:
+            count = doc.to_dict().get("count", 0)
+            new_count = count + 1
+            doc_ref.update({"count": new_count})
+            return new_count
+        else:
+            # 문서가 없으면 새로 생성
+            doc_ref.set({"count": 1})
+            return 1
+    except Exception as e:
+        st.error(f"방문자 수 업데이트 중 오류 발생: {e}")
+        return None
+
 def main():
     # --- 데이터 로딩 및 캐시 관리 ---
     channel_data = load_channel_data()
@@ -482,7 +534,7 @@ def main():
                     except:
                         seconds = 0
                     
-                    if seconds <= 60:
+                    if seconds <= 70:
                         shorts.append(video_data)
                     else:
                         normal_videos.append(video_data)
@@ -617,5 +669,39 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
+def display_videos():
+    """실제 유튜브 채널의 동영상 정보를 표시합니다."""
+    # 캐시된 데이터를 로드합니다.
+    data = load_channel_data()
+    if not data or needs_update(data):
+        # 데이터가 없거나 업데이트가 필요하면 API를 통해 데이터를 가져옵니다.
+        data = fetch_and_cache_youtube_data()
+
+    if not data:
+        st.error("유튜브 데이터를 불러올 수 없습니다.")
+        return
+
+    # 동영상 정보를 분류하여 표시합니다.
+    st.subheader("일반 동영상")
+    for video in data.get('videos', []):
+        duration_str = video['details']['contentDetails']['duration']
+        duration = isodate.parse_duration(duration_str).total_seconds()
+        if duration > 70:
+            st.write(f"**{video['search_snippet']['title']}**")
+            st.write(f"게시일: {format_date(video['search_snippet']['publishedAt'])}")
+            st.write(f"조회수: {format_stat(video['details']['statistics']['viewCount'])}")
+            st.write("---")
+
+    st.subheader("Shorts")
+    for video in data.get('videos', []):
+        duration_str = video['details']['contentDetails']['duration']
+        duration = isodate.parse_duration(duration_str).total_seconds()
+        if duration <= 70:
+            st.write(f"**{video['search_snippet']['title']}**")
+            st.write(f"게시일: {format_date(video['search_snippet']['publishedAt'])}")
+            st.write(f"조회수: {format_stat(video['details']['statistics']['viewCount'])}")
+            st.write("---")
+
 if __name__ == "__main__":
-    main() 
+    main()
+    display_videos() 
