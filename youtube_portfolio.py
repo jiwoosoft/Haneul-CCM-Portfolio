@@ -409,6 +409,16 @@ def main():
     # --- 데이터 로딩 및 캐시 관리 ---
     channel_data = load_channel_data()
 
+    # 실시간 갱신 버튼 추가
+    if st.button('실시간 갱신'):
+        with st.spinner("실시간 데이터를 동기화하는 중입니다..."):
+            updated_data = fetch_and_cache_youtube_data()
+            if updated_data:
+                channel_data = updated_data
+                st.success("데이터를 실시간으로 갱신했습니다!")
+            else:
+                st.warning("데이터를 갱신하지 못했습니다. API 할당량이 초과되었을 수 있습니다.")
+
     if needs_update(channel_data):
         with st.spinner("최신 YouTube 데이터를 동기화하는 중입니다... (API 할당량 초과 시 이전 데이터 표시)"):
             updated_data = fetch_and_cache_youtube_data()
