@@ -74,19 +74,12 @@ def get_channel_info(api_key, channel_id):
         response = requests.get(url)
         response.raise_for_status()
         data = response.json()
-        
-        # 디버깅을 위해 API 응답 전체를 화면에 출력
-        st.info("🐞 최종 디버깅: API로부터 받은 전체 응답입니다.")
-        st.json(data)
-        
-        # API 응답에 'items'가 있고 비어있지 않은지 확인
         if data.get("pageInfo", {}).get("totalResults", 0) > 0 and "items" in data:
             return data["items"][0]
         else:
             return None
     except Exception as e:
-        st.error("🐞 최종 디버깅: get_channel_info 함수에서 오류가 발생했습니다!")
-        st.exception(e)
+        print(f"Error getting channel info: {e}")
         return None
 
 @st.cache_data(ttl=3600)
