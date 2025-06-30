@@ -364,44 +364,37 @@ def initialize_firebase():
     """
     st.info("1. Firebase 초기화 함수 시작")
     try:
-        if "firebase_credentials" in st.secrets:
-            st.info("2. 'firebase_credentials' 키를 찾았습니다.")
+        if "firebase_credentials" in st.secrets and "firebase_database" in st.secrets:
+            st.info("2. 'firebase_credentials'와 'firebase_database' 키를 찾았습니다.")
             creds_dict = dict(st.secrets["firebase_credentials"])
             
-            # 모든 키와 값이 문자열인지 확인 (디버깅용)
-            # for key, value in creds_dict.items():
-            #     st.write(f"Key: {key}, Type: {type(value)}")
-
             if creds_dict and all(isinstance(v, str) for v in creds_dict.values()):
                 st.info("3. Firebase 인증 정보가 유효한 딕셔너리 형식입니다.")
-                cred = credentials.Certificate(creds_dict)
-                firebase_admin.initialize_app(cred, {
-                    'databaseURL': st.secrets["firebase_database"]["databaseURL"]
-                })
-                st.info("4. Firebase 앱이 성공적으로 초기화되었습니다.")
-                return True
+                if not firebase_admin._apps:
+                    cred = credentials.Certificate(creds_dict)
+                    firebase_admin.initialize_app(cred, {
+                        'databaseURL': st.secrets["firebase_database"]["databaseURL"]
+                    })
+                    st.info("4. Firebase 앱이 성공적으로 초기화되었습니다.")
+                return firestore.client()
             else:
                 st.error(f"Firebase 인증 정보가 비어있거나, 올바른 형식이 아닙니다. Secrets에 입력한 내용이 [firebase_credentials] 섹션 형식인지 확인해주세요.")
-                # st.error(f"인증 정보 타입: {type(st.secrets['firebase_credentials'])}")
-                return False
+                return None
         else:
-            st.error("Secrets에서 'firebase_credentials' 키를 찾을 수 없습니다.")
-            return False
+            st.error("Secrets에서 'firebase_credentials' 또는 'firebase_database' 키를 찾을 수 없습니다.")
+            return None
     except Exception as e:
         st.error(f"Firebase 처리 중 심각한 오류 발생: {e}")
         st.info("Secrets에 입력한 키의 내용에 오타가 없는지, JSON 파일의 내용과 완전히 일치하는지 확인해주세요.")
-        return False
+        return None
 
 def get_and_increment_visitor_count(db):
-    """
-    Firestore에서 방문자 수를 가져오고 1 증가시킨 후 반환합니다.
-    DB가 없거나 오류 발생 시 None을 반환합니다.
-    """
+    """Firestore에서 방문자 수를 가져오고 1 증가시킨 뒤 반환합니다."""
     if db is None:
-        return None # 카운터 기능 비활성화
-        
+        st.error("방문자 수 업데이트 중 오류 발생: 데이터베이스 연결이 없습니다.")
+        return "N/A"
     try:
-        doc_ref = db.collection("app_stats").document("visitors")
+        doc_ref = db.collection('visitors').document('counter')
         doc = doc_ref.get()
 
         if doc.exists:
@@ -415,7 +408,7 @@ def get_and_increment_visitor_count(db):
             return 1
     except Exception as e:
         st.error(f"방문자 수 업데이트 중 오류 발생: {e}")
-        return None
+        return "N/A"
 
 def main():
     # --- 데이터 로딩 및 캐시 관리 ---
@@ -457,7 +450,7 @@ def main():
         # --- 방문자 카운터 표시 ---
         db = initialize_firebase()
         visitor_count = get_and_increment_visitor_count(db)
-        if visitor_count:
+        if visitor_count != "N/A":
             st.markdown(f"**방문자 수:** {visitor_count:,}")
 
         st.header("🔍 필터")
