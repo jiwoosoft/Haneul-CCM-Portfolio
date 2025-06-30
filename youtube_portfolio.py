@@ -681,6 +681,13 @@ def display_videos():
         st.error("유튜브 데이터를 불러올 수 없습니다.")
         return
 
+    # 팟캐스트 동영상을 먼저 표시합니다.
+    st.subheader("팟캐스트 동영상")
+    for video in data.get('podcast_videos', []):
+        st.write(f"**{video['snippet']['title']}**")
+        st.write(f"게시일: {format_date(video['snippet']['publishedAt'])}")
+        st.write("---")
+
     # 동영상 정보를 분류하여 표시합니다.
     st.subheader("일반 동영상")
     for video in data.get('videos', []):
